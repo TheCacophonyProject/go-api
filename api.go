@@ -1,3 +1,18 @@
+// go-api - Client for the Cacophony API server.
+// Copyright (C) 2018, The Cacophony Project
+//
+//Licensed under the Apache License, Version 2.0 (the "License");
+//you may not use this file except in compliance with the License.
+//You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+//Unless required by applicable law or agreed to in writing, software
+//distributed under the License is distributed on an "AS IS" BASIS,
+//WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//See the License for the specific language governing permissions and
+//limitations under the License.
+
 package api
 
 import (
@@ -7,10 +22,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime/multipart"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"time"
 )
 
@@ -24,7 +40,7 @@ type CacophonyAPI struct {
 	password       string
 	token          string
 	justRegistered bool
-	client *http.Client
+	client         *http.Client
 }
 
 func (api *CacophonyAPI) Password() string {
@@ -35,19 +51,19 @@ func (api *CacophonyAPI) JustRegistered() bool {
 	return api.justRegistered
 }
 
+const httpTimeout = 60 * time.Second
 const timeout = 30 * time.Second
 const deviceName = "devicename"
 const basePath = "/api/v1"
-const errorAlreadyRegistered ="already registered"
 
 // NewAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
 // Token. If no password is given then the device is registered.
 func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error) {
 	api := &CacophonyAPI{
-		serverURL: 			serverURL,
+		serverURL: serverURL,
 		group:     group,
 		password:  password,
-		client: newHTTPClient(),
+		client:    newHTTPClient(),
 	}
 
 	if deviceName == "" {
@@ -56,9 +72,9 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 
 	api.name = deviceName
 	api.typeName = deviceName
-	api.regURL = api.serverURL + basePath +"/devices"
-	api.authURL = api.serverURL + "/authenticate_device"	
-	
+	api.regURL = api.serverURL + basePath + "/devices"
+	api.authURL = api.serverURL + "/authenticate_device"
+
 	if password == "" {
 		err := api.register()
 		if err != nil {
@@ -107,29 +123,28 @@ func (api *CacophonyAPI) newToken() error {
 	return nil
 }
 
-func newHTTPClient() (*http.Client){
+func newHTTPClient() *http.Client {
 	return &http.Client{
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				DialContext: (&net.Dialer{
-					Timeout:   timeout, // connection timeout
-					KeepAlive: 30 * time.Second,
-					DualStack: true,
-				}).DialContext,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   timeout, // connection timeout
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
 
-				TLSHandshakeTimeout:   timeout,
-				ResponseHeaderTimeout: timeout,
-				ExpectContinueTimeout: 1 * time.Second,
-				MaxIdleConns:    5,
-				IdleConnTimeout: 90 * time.Second,
-			}
-		}
+			TLSHandshakeTimeout:   timeout,
+			ResponseHeaderTimeout: timeout,
+			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConns:          5,
+			IdleConnTimeout:       90 * time.Second,
+		},
+	}
 }
-
 
 func (api *CacophonyAPI) register() error {
 	if api.password != "" {
-		return errors.New(errorAlreadyRegistered)
+		return errors.New("already registered")
 	}
 
 	password := randString(20)
@@ -188,7 +203,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 	io.Copy(fw, r)
 	w.Close()
 
-	req, err := http.NewRequest("POST", api.serverURL + basePath + "/recordings", buf)
+	req, err := http.NewRequest("POST", api.serverURL+basePath+"/recordings", buf)
 	if err != nil {
 		return err
 	}
@@ -202,7 +217,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 	defer resp.Body.Close()
 
 	if err := handleHTTPResponse(resp); err != nil {
-		return err;
+		return err
 	}
 
 	return nil
@@ -238,8 +253,8 @@ func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
 	defer resp.Body.Close()
 
 	// Check server response
-	if err := handleHTTPResponse(resp); err !=nil {
-		return err;
+	if err := handleHTTPResponse(resp); err != nil {
+		return err
 	}
 
 	// Writer the body to file
@@ -250,7 +265,6 @@ func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
 
 	return nil
 }
-
 
 type FileResponse struct {
 	File FileInfo
@@ -272,7 +286,7 @@ type FileDetails struct {
 func (api *CacophonyAPI) GetFileDetails(fileID int) (*FileResponse, error) {
 	buf := new(bytes.Buffer)
 
-	req, err := http.NewRequest("GET", api.serverURL+ basePath + "/files/" +strconv.Itoa(fileID), buf)
+	req, err := http.NewRequest("GET", api.serverURL+basePath+"/files/"+strconv.Itoa(fileID), buf)
 	req.Header.Set("Authorization", api.token)
 	client := new(http.Client)
 
@@ -321,7 +335,7 @@ func (api *CacophonyAPI) ReportEvent(jsonDetails []byte, times []time.Time) erro
 	}
 
 	// Prepare request.
-	req, err := http.NewRequest("POST", api.serverURL + basePath +  "/events", bytes.NewReader(jsonAll))
+	req, err := http.NewRequest("POST", api.serverURL+basePath+"/events", bytes.NewReader(jsonAll))
 	if err != nil {
 		return err
 	}
@@ -337,14 +351,14 @@ func (api *CacophonyAPI) ReportEvent(jsonDetails []byte, times []time.Time) erro
 	defer resp.Body.Close()
 
 	if err := handleHTTPResponse(resp); err != nil {
-		return err;
+		return err
 	}
 
 	return nil
 }
 
-func handleHTTPResponse(resp *Response) error {
-	if !(isHTTPSuccess(resp.StatusCode)){
+func handleHTTPResponse(resp *http.Response) error {
+	if !(isHTTPSuccess(resp.StatusCode)) {
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return temporaryError(fmt.Errorf("request failed (%d) and body read failed: %v", resp.StatusCode, err))
@@ -354,7 +368,7 @@ func handleHTTPResponse(resp *Response) error {
 			permanent: isHTTPClientError(resp.StatusCode),
 		}
 	}
-	return nil;
+	return nil
 }
 
 // Error is returned by API calling methods. As well as an error
@@ -406,7 +420,7 @@ func formatTimestamp(t time.Time) string {
 
 // GetSchedule will get the audio schedule
 func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
-	req, err := http.NewRequest("GET", api.serverURL+ basePath +"schedules", nil)
+	req, err := http.NewRequest("GET", api.serverURL+basePath+"schedules", nil)
 	req.Header.Set("Authorization", api.token)
 	client := new(http.Client)
 

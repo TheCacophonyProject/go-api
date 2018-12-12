@@ -1,14 +1,28 @@
+// go-api - Client for the Cacophony API server.
+// Copyright (C) 2018, The Cacophony Project
+//
+//Licensed under the Apache License, Version 2.0 (the "License");
+//you may not use this file except in compliance with the License.
+//You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+//Unless required by applicable law or agreed to in writing, software
+//distributed under the License is distributed on an "AS IS" BASIS,
+//WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//See the License for the specific language governing permissions and
+//limitations under the License.
 
 package api
 
 import (
 	"errors"
+	"fmt"
+	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
-	"fmt"
 	"path/filepath"
 	"strings"
-	yaml "gopkg.in/yaml.v2"
 )
 
 type Config struct {
@@ -30,9 +44,6 @@ func (conf *Config) Validate() error {
 	}
 	if conf.DeviceName == "" {
 		return errors.New("device-name missing")
-	}
-	if conf.Directory == "" {
-		return errors.New("directory missing")
 	}
 	return nil
 }
