@@ -38,14 +38,13 @@ func (api *CacophonyAPI) JustRegistered() bool {
 const timeout = 30 * time.Second
 const deviceName = "devicename"
 const basePath = "/api/v1"
-const regURL = basePath +"/devices"
 const errorAlreadyRegistered ="already registered"
 
 // NewAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
 // Token. If no password is given then the device is registered.
 func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error) {
 	api := &CacophonyAPI{
-		serverURL: serverURL,
+		serverURL: 			serverURL,
 		group:     group,
 		password:  password,
 		client: newHTTPClient(),
@@ -202,7 +201,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 	}
 	defer resp.Body.Close()
 
-	if err := handleHTTPResponse(resp) {
+	if err := handleHTTPResponse(resp); err != nil {
 		return err;
 	}
 
@@ -239,7 +238,7 @@ func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
 	defer resp.Body.Close()
 
 	// Check server response
-	if err := handleHTTPResponse(resp) {
+	if err := handleHTTPResponse(resp); err !=nil {
 		return err;
 	}
 
@@ -337,7 +336,7 @@ func (api *CacophonyAPI) ReportEvent(jsonDetails []byte, times []time.Time) erro
 	}
 	defer resp.Body.Close()
 
-	if err := handleHTTPResponse(resp) {
+	if err := handleHTTPResponse(resp); err != nil {
 		return err;
 	}
 
