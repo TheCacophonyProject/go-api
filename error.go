@@ -22,7 +22,7 @@ type Error struct {
 	permanent bool
 }
 
-// Error implemented the error interface.
+// Error implements the error interface.
 func (e *Error) Error() string {
 	return e.message
 }
