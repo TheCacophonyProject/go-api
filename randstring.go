@@ -1,5 +1,3 @@
-//  Copyright (C) 2017, The Cacophony Project
-//
 // go-api - Client for the Cacophony API server.
 // Copyright (C) 2018, The Cacophony Project
 //
