@@ -371,35 +371,8 @@ func handleHTTPResponse(resp *http.Response) error {
 	return nil
 }
 
-// Error is returned by API calling methods. As well as an error
-// message, it includes whether the error is permanent or not.
-type Error struct {
-	message   string
-	permanent bool
-}
-
-// Error implemented the error interface.
-func (e *Error) Error() string {
-	return e.message
-}
-
-// Permanent returns true if the error is permanent. Operations
-// resulting in non-permanent/temporary errors may be retried.
-func (e *Error) Permanent() bool {
-	return e.permanent
-}
-
-// IsPermanentError examines the supplied error and returns true if it
-// is permanent.
-func IsPermanentError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if apiErr, ok := err.(*Error); ok {
-		return apiErr.Permanent()
-	}
-	// non-Errors are considered permanent.
-	return true
+func formatTimestamp(t time.Time) string {
+	return t.UTC().Format(time.RFC3339)
 }
 
 func isHTTPSuccess(code int) bool {
@@ -408,14 +381,6 @@ func isHTTPSuccess(code int) bool {
 
 func isHTTPClientError(code int) bool {
 	return code >= 400 && code < 500
-}
-
-func temporaryError(err error) *Error {
-	return &Error{message: err.Error(), permanent: false}
-}
-
-func formatTimestamp(t time.Time) string {
-	return t.UTC().Format(time.RFC3339)
 }
 
 // GetSchedule will get the audio schedule

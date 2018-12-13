@@ -18,11 +18,12 @@ package api
 import (
 	"errors"
 	"fmt"
-	yaml "gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 type Config struct {
@@ -92,8 +93,6 @@ func WritePassword(filename, password string) error {
 }
 
 func Open(configFile string) (*CacophonyAPI, error) {
-	// TODO(mjs) - much of this is copied straight from
-	// thermal-uploader and should be extracted.
 	conf, err := ParseConfigFile(configFile)
 	if err != nil {
 		return nil, fmt.Errorf("configuration error: %v", err)
