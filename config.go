@@ -112,6 +112,7 @@ func Open(configFile string) (*CacophonyAPI, error) {
 	// event-reporter register at about the same time. Extract this to
 	// a library which does locking.
 	if api.JustRegistered() {
+
 		err := WritePassword(privConfigFilename, api.Password())
 		if err != nil {
 			return nil, err
