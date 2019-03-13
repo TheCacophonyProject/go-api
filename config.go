@@ -16,13 +16,16 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/gofrs/flock"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -89,7 +92,21 @@ func WritePassword(filename, password string) error {
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filename, buf, 0600)
+
+	fileLock := flock.New(filename)
+	lockCtx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
+	defer cancel()
+	locked, err := fileLock.TryLockContext(lockCtx, 678*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	if locked {
+		err = ioutil.WriteFile(filename, buf, 0600)
+		fileLock.Unlock()
+	} else {
+		return fmt.Errorf("writepassword could not get file lock %v", filename)
+	}
+	return err
 }
 
 func Open(configFile string) (*CacophonyAPI, error) {
