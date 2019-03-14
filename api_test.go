@@ -163,8 +163,8 @@ func TestAPIRegistration(t *testing.T) {
 	err = api.register()
 	assert.True(t, api.JustRegistered())
 	assert.Equal(t, nil, err)
-	assert.NotEqual(t, "", api.Client.password)
-	assert.NotEqual(t, "", api.Client.token)
+	assert.NotEqual(t, "", api.device.password)
+	assert.NotEqual(t, "", api.token)
 	assert.True(t, api.JustRegistered())
 
 	err = api.authenticate()
@@ -196,7 +196,7 @@ func TestAPIReportEvent(t *testing.T) {
 }
 
 func getAPI(url, password string, register bool) *CacophonyAPI {
-	client := &CacophonyClient{
+	client := &CacophonyDevice{
 		group:    "test-group",
 		name:     randString(10),
 		password: password,
@@ -204,16 +204,16 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 
 	api := &CacophonyAPI{
 		serverURL:  url,
-		Client:     client,
+		device:     client,
 		httpClient: newHTTPClient(),
 		regURL:     url + basePath + "/devices",
 		authURL:    url + "/authenticate_device",
 	}
 
 	if register {
-		api.Client.password = randString(20)
-		api.Client.token = "tok-" + randString(20)
-		api.Client.justRegistered = true
+		api.device.password = randString(20)
+		api.token = "tok-" + randString(20)
+		api.justRegistered = true
 	}
 	return api
 }
