@@ -17,6 +17,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
@@ -29,50 +30,77 @@ var tokenSuccess bool = true
 var responseHeader int = http.StatusOK
 var message string
 var rawThermalData string = "this is the raw thermal file"
+var apiURL string = "http://localhost:1080"
 
-func TestRegistration(t *testing.T) {
+func TestRegistrationHttpRequest(t *testing.T) {
 	ts := GetRegisterServer(t)
 	defer ts.Close()
-
 	api := getAPI(ts.URL, "", false)
-	actual := api.newToken()
-	assert.NotEqual(t, nil, actual)
-
-	actual = api.register()
-	assert.Equal(t, nil, actual)
-	assert.NotEqual(t, "", api.Client.password)
-	assert.NotEqual(t, "", api.Client.token)
-	assert.True(t, api.JustRegistered())
+	err := api.register()
+	assert.Equal(t, nil, err)
 }
 
-func TestNewToken(t *testing.T) {
+//GetRegisterServer replies with a new token
+func GetRegisterServer(t *testing.T) *httptest.Server {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestJson := getJSONRequestMap(r)
+
+		assert.Equal(t, http.MethodPost, r.Method)
+		assert.NotEqual(t, "", requestJson["password"])
+		assert.NotEqual(t, "", requestJson["group"])
+		assert.NotEqual(t, "", requestJson["devicename"])
+
+		w.WriteHeader(responseHeader)
+		w.Header().Set("Content-Type", "application/json")
+		token := getTokenResponse()
+		json.NewEncoder(w).Encode(token)
+	}))
+	return ts
+}
+
+func TestNewTokenHttpRequest(t *testing.T) {
 	ts := GetNewTokenServer(t)
 	defer ts.Close()
 
 	api := getAPI(ts.URL, "", true)
 	prevToken := api.Client.token
-	_ = api.newToken()
+	err := api.authenticate()
+	assert.Equal(t, err, nil)
+}
 
-	assert.NotEqual(t, prevToken, api.Client.token)
+func TestRegistration(t *testing.T) {
+	api := getAPI(apiURL, "", false)
+	err := api.newToken()
+	assert.NotEqual(t, nil, err)
+
+	err = api.register()
+	assert.True(t, api.JustRegistered())
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, "", api.Client.password)
+	assert.NotEqual(t, "", api.Client.token)
+	assert.True(t, api.JustRegistered())
+
+	prevToken := api.Client.token
+	err := api.authenticate()
+	assert.Equal(t, err, nil)
 }
 
 func TestUploadThermalRaw(t *testing.T) {
-	ts := GetUploadThermalRawServer(t)
-	defer ts.Close()
+	//	ts := GetUploadThermalRawServer(t)
+	//	defer ts.Close()
 
-	api := getAPI(ts.URL, "", true)
+	api := getAPI(apiURL, "", true)
 	reader := strings.NewReader(rawThermalData)
-	actual := api.UploadThermalRaw(reader)
+	err := api.UploadThermalRaw(reader)
 
-	assert.Equal(t, nil, actual)
+	assert.Equal(t, nil, err)
 }
 
 //GetRegisterServer replies with a new token
 func GetNewTokenServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.True(t, strings.HasSuffix(r.URL.Path, "/authenticate_device"))
-
 		requestJson := getJSONRequestMap(r)
+
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.NotEqual(t, "", requestJson["password"])
 		assert.NotEqual(t, "", requestJson["devicename"])
@@ -90,25 +118,6 @@ func getTokenResponse() *tokenResponse {
 		Messages: []string{message},
 		Token:    "tok-" + randString(20),
 	}
-}
-
-//GetRegisterServer replies with a new token
-func GetRegisterServer(t *testing.T) *httptest.Server {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.True(t, strings.HasSuffix(r.URL.Path, "/devices"))
-
-		requestJson := getJSONRequestMap(r)
-		assert.Equal(t, http.MethodPost, r.Method)
-		assert.NotEqual(t, "", requestJson["password"])
-		assert.NotEqual(t, "", requestJson["group"])
-		assert.NotEqual(t, "", requestJson["devicename"])
-
-		w.WriteHeader(responseHeader)
-		w.Header().Set("Content-Type", "application/json")
-		token := getTokenResponse()
-		json.NewEncoder(w).Encode(token)
-	}))
-	return ts
 }
 
 func getJSONRequestMap(r *http.Request) map[string]string {
@@ -162,11 +171,10 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-func getAPI(url, password string, registered bool) *CacophonyAPI {
+func getAPI(url, password string, register bool) *CacophonyAPI {
 	client := &CacophonyClient{
-		group:    "group",
-		name:     "name",
-		typeName: "name",
+		group:    "test-group",
+		name:     randString(10),
 		password: password,
 	}
 
@@ -178,7 +186,7 @@ func getAPI(url, password string, registered bool) *CacophonyAPI {
 		authURL:    url + "/authenticate_device",
 	}
 
-	if registered {
+	if register {
 		api.Client.password = randString(20)
 		api.Client.token = "tok-" + randString(20)
 		api.Client.justRegistered = true

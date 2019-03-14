@@ -33,7 +33,6 @@ import (
 type CacophonyClient struct {
 	group          string
 	name           string
-	typeName       string
 	password       string
 	token          string
 	justRegistered bool
@@ -70,7 +69,6 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 	client := &CacophonyClient{
 		group:    group,
 		name:     deviceName,
-		typeName: deviceName,
 		password: password,
 	}
 
@@ -92,7 +90,7 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 			return nil, err
 		}
 	} else {
-		err := api.newToken()
+		err := api.authenticate()
 		if err != nil {
 			return nil, err
 		}
@@ -100,8 +98,9 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 	return api, nil
 }
 
-// newToken retrieves a token for this client
-func (api *CacophonyAPI) newToken() error {
+// authenticate authenticates the device with the api server
+// and retrieves the token
+func (api *CacophonyAPI) authenticate() error {
 
 	if api.Client.password == "" {
 		return errors.New("no password set")
@@ -122,6 +121,10 @@ func (api *CacophonyAPI) newToken() error {
 		return err
 	}
 	defer postResp.Body.Close()
+
+	if err := handleHTTPResponse(postResp); err != nil {
+		return err
+	}
 
 	var resp tokenResponse
 	d := json.NewDecoder(postResp.Body)
@@ -178,6 +181,10 @@ func (api *CacophonyAPI) register() error {
 		return err
 	}
 	defer postResp.Body.Close()
+
+	if err := handleHTTPResponse(postResp); err != nil {
+		return err
+	}
 
 	var respData tokenResponse
 	d := json.NewDecoder(postResp.Body)
