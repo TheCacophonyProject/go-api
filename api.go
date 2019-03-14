@@ -91,7 +91,6 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 		if err != nil {
 			return nil, err
 		}
-		client.justRegistered = true
 	} else {
 		err := api.newToken()
 		if err != nil {
@@ -191,9 +190,13 @@ func (api *CacophonyAPI) register() error {
 
 	api.Client.password = password
 	api.Client.token = respData.Token
+	api.Client.justRegistered = true
+
 	return nil
 }
 
+// UploadThermalRaw uploads the file to the api server as a multipartmessage
+// with data of type thermalRaw specified
 func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
@@ -251,8 +254,6 @@ func (r *tokenResponse) message() string {
 }
 
 func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
-	// Create the file
-
 	out, err := os.Create(path)
 	if err != nil {
 		return err

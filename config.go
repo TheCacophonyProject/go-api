@@ -39,6 +39,7 @@ type PrivateConfig struct {
 	Password string `yaml:"password"`
 }
 
+//Validate checks supplied Config contains the required data
 func (conf *Config) Validate() error {
 	if conf.ServerURL == "" {
 		return errors.New("server-url missing")
@@ -52,6 +53,7 @@ func (conf *Config) Validate() error {
 	return nil
 }
 
+//ParseConfig takes supplied filename and returns a parsed Config struct
 func ParseConfigFile(filename string) (*Config, error) {
 	buf, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -60,6 +62,7 @@ func ParseConfigFile(filename string) (*Config, error) {
 	return ParseConfig(buf)
 }
 
+//ParseConfig takes supplied bytes and returns a parsed Config struct
 func ParseConfig(buf []byte) (*Config, error) {
 	conf := &Config{}
 
@@ -72,6 +75,7 @@ func ParseConfig(buf []byte) (*Config, error) {
 	return conf, nil
 }
 
+//ReadPassword reads the password from supplied filename location
 func ReadPassword(filename string) (string, error) {
 	buf, err := ioutil.ReadFile(filename)
 	if os.IsNotExist(err) {
@@ -86,6 +90,8 @@ func ReadPassword(filename string) (string, error) {
 	return conf.Password, nil
 }
 
+// WritePassword takes a filename and password. Locks the file (OS-level) and
+// writes the supplied password to the file
 func WritePassword(filename, password string) error {
 	conf := PrivateConfig{Password: password}
 	buf, err := yaml.Marshal(&conf)
@@ -94,7 +100,7 @@ func WritePassword(filename, password string) error {
 	}
 
 	fileLock := flock.New(filename)
-	lockCtx, cancel := context.WithTimeout(context.Background(), 3*time.Millisecond)
+	lockCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	locked, err := fileLock.TryLockContext(lockCtx, 678*time.Millisecond)
 	if err != nil {
@@ -104,11 +110,13 @@ func WritePassword(filename, password string) error {
 		err = ioutil.WriteFile(filename, buf, 0600)
 		fileLock.Unlock()
 	} else {
-		return fmt.Errorf("writepassword could not get file lock %v", filename)
+		return fmt.Errorf("WritePassword could not get file lock %v", filename)
 	}
 	return err
 }
 
+// Open the configFile and creates a new CacophonyAPI with the configFile information
+// and saves the generated password to privConfigFileName(configFile)
 func Open(configFile string) (*CacophonyAPI, error) {
 	conf, err := ParseConfigFile(configFile)
 	if err != nil {
@@ -125,11 +133,7 @@ func Open(configFile string) (*CacophonyAPI, error) {
 		return nil, err
 	}
 
-	// TODO(mjs) - there's a race here if both thermal-uploader and
-	// event-reporter register at about the same time. Extract this to
-	// a library which does locking.
 	if api.JustRegistered() {
-
 		err := WritePassword(privConfigFilename, api.Password())
 		if err != nil {
 			return nil, err
@@ -138,6 +142,8 @@ func Open(configFile string) (*CacophonyAPI, error) {
 	return api, nil
 }
 
+// privCOnfigFileName take a configFile and creates an associated
+// file to store the password in with suffix -priv.yaml
 func privConfigFilename(configFile string) string {
 	dirname, filename := filepath.Split(configFile)
 	bareFilename := strings.TrimSuffix(filename, ".yaml")
