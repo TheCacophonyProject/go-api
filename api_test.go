@@ -17,13 +17,14 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var tokenSuccess bool = true
@@ -38,6 +39,41 @@ func TestRegistrationHttpRequest(t *testing.T) {
 	api := getAPI(ts.URL, "", false)
 	err := api.register()
 	assert.Equal(t, nil, err)
+}
+
+func TestNewTokenHttpRequest(t *testing.T) {
+	ts := GetNewTokenServer(t)
+	defer ts.Close()
+
+	api := getAPI(ts.URL, "", true)
+	err := api.authenticate()
+	assert.Equal(t, err, nil)
+}
+
+func TestUploadThermalRawHttpRequest(t *testing.T) {
+	ts := GetUploadThermalRawServer(t)
+	defer ts.Close()
+
+	api := getAPI(apiURL, "", false)
+	api.register()
+	reader := strings.NewReader(rawThermalData)
+	err := api.UploadThermalRaw(reader)
+	assert.Equal(t, nil, err)
+}
+
+func getTokenResponse() *tokenResponse {
+	return &tokenResponse{
+		Success:  tokenSuccess,
+		Messages: []string{message},
+		Token:    "tok-" + randString(20),
+	}
+}
+
+func getJSONRequestMap(r *http.Request) map[string]string {
+	var requestJson = map[string]string{}
+	decoder := json.NewDecoder(r.Body)
+	decoder.Decode(&requestJson)
+	return requestJson
 }
 
 //GetRegisterServer replies with a new token
@@ -58,44 +94,6 @@ func GetRegisterServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-func TestNewTokenHttpRequest(t *testing.T) {
-	ts := GetNewTokenServer(t)
-	defer ts.Close()
-
-	api := getAPI(ts.URL, "", true)
-	prevToken := api.Client.token
-	err := api.authenticate()
-	assert.Equal(t, err, nil)
-}
-
-func TestRegistration(t *testing.T) {
-	api := getAPI(apiURL, "", false)
-	err := api.newToken()
-	assert.NotEqual(t, nil, err)
-
-	err = api.register()
-	assert.True(t, api.JustRegistered())
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, "", api.Client.password)
-	assert.NotEqual(t, "", api.Client.token)
-	assert.True(t, api.JustRegistered())
-
-	prevToken := api.Client.token
-	err := api.authenticate()
-	assert.Equal(t, err, nil)
-}
-
-func TestUploadThermalRaw(t *testing.T) {
-	//	ts := GetUploadThermalRawServer(t)
-	//	defer ts.Close()
-
-	api := getAPI(apiURL, "", true)
-	reader := strings.NewReader(rawThermalData)
-	err := api.UploadThermalRaw(reader)
-
-	assert.Equal(t, nil, err)
-}
-
 //GetRegisterServer replies with a new token
 func GetNewTokenServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -111,20 +109,6 @@ func GetNewTokenServer(t *testing.T) *httptest.Server {
 		json.NewEncoder(w).Encode(token)
 	}))
 	return ts
-}
-func getTokenResponse() *tokenResponse {
-	return &tokenResponse{
-		Success:  tokenSuccess,
-		Messages: []string{message},
-		Token:    "tok-" + randString(20),
-	}
-}
-
-func getJSONRequestMap(r *http.Request) map[string]string {
-	var requestJson = map[string]string{}
-	decoder := json.NewDecoder(r.Body)
-	decoder.Decode(&requestJson)
-	return requestJson
 }
 
 func getMimeParts(r *http.Request) (string, string) {
@@ -169,6 +153,46 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 		w.WriteHeader(responseHeader)
 	}))
 	return ts
+}
+
+func TestAPIRegistration(t *testing.T) {
+	api := getAPI(apiURL, "", false)
+	err := api.authenticate()
+	assert.NotEqual(t, nil, err)
+
+	err = api.register()
+	assert.True(t, api.JustRegistered())
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, "", api.Client.password)
+	assert.NotEqual(t, "", api.Client.token)
+	assert.True(t, api.JustRegistered())
+
+	err = api.authenticate()
+	assert.Equal(t, err, nil)
+}
+
+func TestAPIUploadThermalRaw(t *testing.T) {
+	api := getAPI(apiURL, "", false)
+	err := api.register()
+
+	reader := strings.NewReader(rawThermalData)
+	err = api.UploadThermalRaw(reader)
+	assert.Equal(t, nil, err)
+}
+
+func getTestEvent() ([]byte, []time.Time) {
+	details := []byte(`{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`)
+	timeStamps := []time.Time{time.Now()}
+	return details, timeStamps
+}
+
+func TestAPIReportEvent(t *testing.T) {
+	api := getAPI(apiURL, "", false)
+	err := api.register()
+
+	details, timeStamps := getTestEvent()
+	err = api.ReportEvent(details, timeStamps)
+	assert.Equal(t, nil, err)
 }
 
 func getAPI(url, password string, register bool) *CacophonyAPI {
