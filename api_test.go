@@ -54,8 +54,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 	ts := GetUploadThermalRawServer(t)
 	defer ts.Close()
 
-	api := getAPI(ts.URL, "", false)
-	api.register()
+	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
 	err := api.UploadThermalRaw(reader)
 	assert.Equal(t, nil, err)
@@ -169,6 +168,14 @@ func TestAPIRegistration(t *testing.T) {
 
 	err = api.authenticate()
 	assert.Equal(t, err, nil)
+}
+
+func TestAPIAuthenticate(t *testing.T) {
+	api := getAPI(apiURL, "test-password", false)
+	api.device.name = "test-device"
+	err := api.authenticate()
+	assert.Equal(t, nil, err)
+	assert.NotEqual(t, "", api.token)
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
