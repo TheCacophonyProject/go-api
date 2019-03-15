@@ -339,7 +339,6 @@ func (api *CacophonyAPI) GetFileDetails(fileID int) (*FileResponse, error) {
 
 	req, err := http.NewRequest("GET", joinURL(api.serverURL, apiBasePath, "/files/"+strconv.Itoa(fileID)), buf)
 	req.Header.Set("Authorization", api.token)
-	//client := new(http.Client)
 
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
@@ -394,8 +393,6 @@ func (api *CacophonyAPI) ReportEvent(jsonDetails []byte, times []time.Time) erro
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", api.token)
 
-	// Send.
-	//client := &http.Client{Timeout: httpTimeout}
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
 		return temporaryError(err)

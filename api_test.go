@@ -18,15 +18,20 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var tokenSuccess = true
@@ -38,6 +43,7 @@ var defaultDevice = "test-device"
 var defaultPassword = "test-password"
 var defaultGroup = "test-group"
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
+var tempPasswordFile = "password.tmp"
 
 //Tests against httptest
 
@@ -213,6 +219,60 @@ func TestAPIReportEvent(t *testing.T) {
 	details, timeStamps := getTestEvent()
 	err = api.ReportEvent(details, timeStamps)
 	assert.Equal(t, nil, err)
+}
+
+func createTempPasswordFile(filename, password string) error {
+	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0775)
+	f.Truncate(0)
+	f.Seek(0, 0)
+
+	defer f.Close()
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString(password)
+	return err
+}
+
+func readPassword(filename string) (string, error) {
+	content, err := ioutil.ReadFile(filename)
+	return string(content), err
+}
+
+func getLock(filename string) (*flock.Flock, bool, error) {
+	fileLock := flock.New(tempPasswordFile)
+	lockCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	locked, err := fileLock.TryLockContext(lockCtx, 678*time.Millisecond)
+	return fileLock, locked, err
+}
+
+func TestPasswordLock(t *testing.T) {
+	tempPassword := randString(20)
+	err := createTempPasswordFile(tempPasswordFile, tempPassword)
+	require.Equal(t, err, nil, "must be able to create/open "+tempPasswordFile)
+
+	fileLock, locked, err := getLock(tempPasswordFile)
+	require.True(t, locked, "File lock must succeed")
+	require.Equal(t, err, nil, "File lock must succeed")
+
+	err = WritePassword(tempPasswordFile, randString(20))
+	assert.NotEqual(t, nil, err)
+	fileLock.Unlock()
+
+	currentPassword, err := readPassword(tempPasswordFile)
+	assert.Equal(t, err, nil)
+	assert.Equal(t, tempPassword, currentPassword)
+
+	tempPassword = randString(20)
+	err = WritePassword(tempPasswordFile, tempPassword)
+	assert.Equal(t, err, nil)
+
+	currentPassword, err = readPassword(tempPasswordFile)
+	assert.Equal(t, err, nil)
+	assert.NotEqual(t, currentPassword, tempPassword)
+
+	err = os.Remove(tempPasswordFile)
 }
 
 // getAPI returns a CacophonyAPI for testing purposes using provided url and password with random name
