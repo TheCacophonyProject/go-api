@@ -54,7 +54,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 	ts := GetUploadThermalRawServer(t)
 	defer ts.Close()
 
-	api := getAPI(apiURL, "", false)
+	api := getAPI(ts.URL, "", false)
 	api.register()
 	reader := strings.NewReader(rawThermalData)
 	err := api.UploadThermalRaw(reader)
