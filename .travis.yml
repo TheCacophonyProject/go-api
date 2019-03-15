@@ -18,8 +18,6 @@ before_script:
   - cd ..
   - ls
   - docker cp db-test-seed.sql cacophony-api:/db-seed.sql
-  - sudo docker exec -it cacophony-api bash
-  - sudo -i -u postgres psql cacophonytest -f/db-seed.sql
-  - exit
+  - sudo docker exec cacophony-api sh -c "sudo -i -u postgres psql cacophonytest -f/db-seed.sql"
 script:
   - go vet ./... && go test ./...
