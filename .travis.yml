@@ -13,6 +13,6 @@ go:
 
 before_script:
   - git clone "https://github.com/TheCacophonyProject/cacophony-api"
-  - .cacophony-api/run --isolate --background
+  - cacophony-api/run --isolate --background
 script:
   - go vet ./... && go test ./...
