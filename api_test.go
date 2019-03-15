@@ -33,6 +33,7 @@ var message string
 var rawThermalData string = "this is the raw thermal file"
 var apiURL string = "http://localhost:1080"
 
+//Tests against httptest
 func TestRegistrationHttpRequest(t *testing.T) {
 	ts := GetRegisterServer(t)
 	defer ts.Close()
@@ -154,6 +155,7 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+//Tests against cacophony-api server running at apiURL
 func TestAPIRegistration(t *testing.T) {
 	api := getAPI(apiURL, "", false)
 	err := api.authenticate()

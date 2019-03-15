@@ -11,13 +11,14 @@ go:
   - "1.10.x"
   - "1.11.x"
 
-before_script:
+install:
   - git clone "https://github.com/TheCacophonyProject/cacophony-api"
   - cd cacophony-api
   - ./run --isolate --background
   - cd ..
-  - ls
   - docker cp db-test-seed.sql cacophony-api:/db-seed.sql
+before_script:
+  - ./wait-for-api || { docker ps; docker logs cacophony-api; exit 1; }
   - sudo docker exec cacophony-api sh -c "sudo -i -u postgres psql cacophonytest -f/db-seed.sql"
 script:
   - go vet ./... && go test ./...
