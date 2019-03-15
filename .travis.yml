@@ -16,8 +16,8 @@ before_script:
   - cd cacophony-api
   - ./run --isolate --background
   - cd ..
-
-  - docker cp go-api/db-test-seed.sql cacophony-api:/db-seed.sql
+  - ls
+  - docker cp db-test-seed.sql cacophony-api:/db-seed.sql
   - sudo docker exec -it cacophony-api bash
   - sudo -i -u postgres psql cacophonytest -f/db-seed.sql
   - exit
