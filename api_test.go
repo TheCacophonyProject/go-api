@@ -1,4 +1,6 @@
 // go-api - Client for the Cacophony API server.
+// tests against cacophony-api require apiURL to be pointing
+// to a valid cacophony-api server and test-seed.sql to be run
 // Copyright (C) 2018, The Cacophony Project
 //
 //Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,13 +29,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var tokenSuccess bool = true
-var responseHeader int = http.StatusOK
+var tokenSuccess = true
+var responseHeader = http.StatusOK
 var message string
-var rawThermalData string = "this is the raw thermal file"
-var apiURL string = "http://localhost:1080"
+var rawThermalData = "this is the raw thermal file"
+var apiURL = "http://localhost:1080"
+var defaultDevice = "test-device"
+var defaultPassword = "test-password"
+var defaultGroup = "test-group"
+var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
 //Tests against httptest
+
 func TestRegistrationHttpRequest(t *testing.T) {
 	ts := GetRegisterServer(t)
 	defer ts.Close()
@@ -43,7 +50,7 @@ func TestRegistrationHttpRequest(t *testing.T) {
 }
 
 func TestNewTokenHttpRequest(t *testing.T) {
-	ts := GetNewTokenServer(t)
+	ts := GetNewAuthenticateServer(t)
 	defer ts.Close()
 
 	api := getAPI(ts.URL, "", true)
@@ -76,7 +83,8 @@ func getJSONRequestMap(r *http.Request) map[string]string {
 	return requestJson
 }
 
-//GetRegisterServer replies with a new token
+// GetRegisterServer returns a test server that checks that register posts contain
+// password,group and devicename
 func GetRegisterServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestJson := getJSONRequestMap(r)
@@ -94,8 +102,9 @@ func GetRegisterServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-//GetRegisterServer replies with a new token
-func GetNewTokenServer(t *testing.T) *httptest.Server {
+//GetNewAuthenticateServer returns a test server that checks that posts contains
+// passowrd and devicename
+func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestJson := getJSONRequestMap(r)
 
@@ -111,6 +120,7 @@ func GetNewTokenServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
+//getMimeParts retrieves data and  file:file and Value:data from a multipart request
 func getMimeParts(r *http.Request) (string, string) {
 	partReader, err := r.MultipartReader()
 
@@ -139,10 +149,10 @@ func getMimeParts(r *http.Request) (string, string) {
 	return dataType, fileData
 }
 
-//GetUploadThermalRawServer checks that the message is multipart and contains file:file and Value:data
+//GetUploadThermalRawServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
+//and Authorization header
 func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.True(t, strings.HasSuffix(r.URL.Path, "/recordings"))
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.NotEqual(t, nil, r.Header.Get("Authorization"))
 
@@ -156,14 +166,15 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 }
 
 //Tests against cacophony-api server running at apiURL
+
 func TestAPIRegistration(t *testing.T) {
 	api := getAPI(apiURL, "", false)
 	err := api.authenticate()
 	assert.NotEqual(t, nil, err)
 
 	err = api.register()
-	assert.True(t, api.JustRegistered())
 	assert.Equal(t, nil, err)
+	assert.True(t, api.JustRegistered())
 	assert.NotEqual(t, "", api.device.password)
 	assert.NotEqual(t, "", api.token)
 	assert.True(t, api.JustRegistered())
@@ -173,8 +184,8 @@ func TestAPIRegistration(t *testing.T) {
 }
 
 func TestAPIAuthenticate(t *testing.T) {
-	api := getAPI(apiURL, "test-password", false)
-	api.device.name = "test-device"
+	api := getAPI(apiURL, defaultPassword, false)
+	api.device.name = defaultDevice
 	err := api.authenticate()
 	assert.Equal(t, nil, err)
 	assert.NotEqual(t, "", api.token)
@@ -190,7 +201,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 }
 
 func getTestEvent() ([]byte, []time.Time) {
-	details := []byte(`{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`)
+	details := []byte(testEventDetail)
 	timeStamps := []time.Time{time.Now()}
 	return details, timeStamps
 }
@@ -204,9 +215,11 @@ func TestAPIReportEvent(t *testing.T) {
 	assert.Equal(t, nil, err)
 }
 
+// getAPI returns a CacophonyAPI for testing purposes using provided url and password with random name
+// if register is set will provide a random token and password and set justRegistered
 func getAPI(url, password string, register bool) *CacophonyAPI {
 	client := &CacophonyDevice{
-		group:    "test-group",
+		group:    defaultGroup,
 		name:     randString(10),
 		password: password,
 	}
@@ -215,8 +228,6 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 		serverURL:  url,
 		device:     client,
 		httpClient: newHTTPClient(),
-		regURL:     url + basePath + "/devices",
-		authURL:    url + "/authenticate_device",
 	}
 
 	if register {
