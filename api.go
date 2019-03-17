@@ -85,7 +85,34 @@ func (api *CacophonyAPI) JustRegistered() bool {
 	return api.justRegistered
 }
 
-// NewAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
+// NewAPIFromConfig prases the supplied configFile and creates a new CacophonyAPI with the configFile information
+// and saves the generated password to privConfigFileName(configFile)
+func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
+	conf, err := ParseConfigFile(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("configuration error: %v", err)
+	}
+	privConfigFilename := privConfigFilename(configFile)
+	password, err := ReadPassword(privConfigFilename)
+	if err != nil {
+		return nil, err
+	}
+
+	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, password)
+	if err != nil {
+		return nil, err
+	}
+
+	if api.JustRegistered() {
+		err := WritePassword(privConfigFilename, api.Password())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return api, nil
+}
+
+// createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
 // Token. If no password is given then the device is registered.
 func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error) {
 

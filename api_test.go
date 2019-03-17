@@ -34,11 +34,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var apiURL = "http://localhost:1080"
 var tokenSuccess = true
 var responseHeader = http.StatusOK
-var message string
-var rawThermalData = "this is the raw thermal file"
-var apiURL = "http://localhost:1080"
+var rawThermalData = randString(100)
 var defaultDevice = "test-device"
 var defaultPassword = "test-password"
 var defaultGroup = "test-group"
@@ -77,7 +76,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 func getTokenResponse() *tokenResponse {
 	return &tokenResponse{
 		Success:  tokenSuccess,
-		Messages: []string{message},
+		Messages: []string{},
 		Token:    "tok-" + randString(20),
 	}
 }
