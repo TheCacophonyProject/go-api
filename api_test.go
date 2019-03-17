@@ -221,6 +221,7 @@ func TestAPIReportEvent(t *testing.T) {
 	assert.Equal(t, nil, err)
 }
 
+//createTempPasswordFile makes or rewrites supplied filename with password
 func createTempPasswordFile(filename, password string) error {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0775)
 	f.Truncate(0)

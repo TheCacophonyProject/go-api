@@ -54,13 +54,14 @@ type CacophonyAPI struct {
 	justRegistered bool
 }
 
-func joinURL(basePath string, urls ...string) string {
+// joinURL creates an absolute url with supplied baseURL, and all paths
+func joinURL(baseURL string, paths ...string) string {
 
-	u, err := url.Parse(basePath)
+	u, err := url.Parse(baseURL)
 	if err != nil {
 		return ""
 	}
-	url := path.Join(urls...)
+	url := path.Join(paths...)
 	u.Path = path.Join(u.Path, url)
 	return u.String()
 }
@@ -177,7 +178,7 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-//register a device with Cacophony API and retrieves it's token
+// register a device with Cacophony API and retrieves it's token
 func (api *CacophonyAPI) register() error {
 	if api.device.password != "" {
 		return errors.New("already registered")
@@ -287,7 +288,7 @@ func (r *tokenResponse) message() string {
 	}
 }
 
-//getFileFromJWT downloads a file from the Cacophony API using supplied JWT
+// getFileFromJWT downloads a file from the Cacophony API using supplied JWT
 // and saves it to the supplied path
 func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
 	out, err := os.Create(path)
