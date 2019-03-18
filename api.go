@@ -93,18 +93,33 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 		return nil, fmt.Errorf("configuration error: %v", err)
 	}
 	privConfigFilename := privConfigFilename(configFile)
-	password, err := ReadPassword(privConfigFilename)
+	confPassword := NewConfigPassword(privConfigFilename)
+
+	password, err := confPassword.ReadPassword()
 	if err != nil {
 		return nil, err
 	}
 
+	if password == "" {
+		locked, err := confPassword.GetExLock()
+		if locked == false || err != nil {
+			return nil, err
+		}
+		defer confPassword.Unlock()
+
+		//read again incase was just written to while waiting for exlock
+		password, err = confPassword.ReadPassword()
+		if err != nil {
+			return nil, err
+		}
+	}
 	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, password)
 	if err != nil {
 		return nil, err
 	}
 
 	if api.JustRegistered() {
-		err := WritePassword(privConfigFilename, api.Password())
+		err := confPassword.WritePassword(api.Password())
 		if err != nil {
 			return nil, err
 		}
@@ -178,9 +193,6 @@ func (api *CacophonyAPI) authenticate() error {
 	if err := d.Decode(&resp); err != nil {
 		return fmt.Errorf("decode: %v", err)
 	}
-	if !resp.Success {
-		return fmt.Errorf("failed getting new token: %v", resp.message())
-	}
 	api.token = resp.Token
 	return nil
 }
@@ -240,9 +252,6 @@ func (api *CacophonyAPI) register() error {
 	if err := d.Decode(&respData); err != nil {
 		return fmt.Errorf("decode: %v", err)
 	}
-	if !respData.Success {
-		return fmt.Errorf("registration failed: %v", respData.message())
-	}
 
 	api.device.password = password
 	api.token = respData.Token
@@ -297,22 +306,17 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 }
 
 type tokenResponse struct {
-	Success  bool
 	Messages []string
 	Token    string
 }
 
 // message gets the first message of the supplised tokenResponse if present
-// otherwise default of "unknown" if tokenResponse was unsuccesfull
+// otherwise default of "unknown"
 func (r *tokenResponse) message() string {
 	if len(r.Messages) > 0 {
 		return r.Messages[0]
 	}
-	if r.Success {
-		return ""
-	} else {
-		return "unknown"
-	}
+	return "unknown"
 }
 
 // getFileFromJWT downloads a file from the Cacophony API using supplied JWT

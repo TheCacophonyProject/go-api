@@ -1,10 +1,3 @@
--- sudo -i -u postgres psql cacophonytest -f/home/zaza/go/src/github.com/TheCacophonyProject/go-api/db-seed.sql
---docker cp db-seed.sql cacophony-api:/db-seed.sql
--- sudo -i -u postgres psql cacophonytest -f/db-seed.sql
-
---admin user  admin//password
---INSERT INTO "Users" (username, email, password, "globalPermission", "createdAt", "updatedAt") VALUES ('admin_test', 'admin@email.com', '$2a$10$S..GUBx1zVb6r1QklWu5kOgx5czlAPJM1JxeJ0uHAO3nRRhDtNazm', 'write', now(), now());
- 
  --test-group
 INSERT INTO "Groups" ("id","groupname","createdAt","updatedAt") VALUES (DEFAULT,'test-group','2019-03-14 20:15:23.423 +00:00','2019-03-14 20:15:23.423 +00:00');
 

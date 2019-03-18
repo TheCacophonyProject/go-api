@@ -1,6 +1,4 @@
 // go-api - Client for the Cacophony API server.
-// tests against cacophony-api require apiURL to be pointing
-// to a valid cacophony-api server and test-seed.sql to be run
 // Copyright (C) 2018, The Cacophony Project
 //
 //Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,7 +16,6 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"io/ioutil"
@@ -29,20 +26,25 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gofrs/flock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	yaml "gopkg.in/yaml.v2"
 )
+
+// tests against cacophony-api require apiURL to be pointing
+// to a valid cacophony-api server and test-seed.sql to be run
 
 var apiURL = "http://localhost:1080"
 var tokenSuccess = true
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
+var testConfig = "/var/tmp/go-api-test-config.yaml"
+
 var defaultDevice = "test-device"
 var defaultPassword = "test-password"
 var defaultGroup = "test-group"
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
-var tempPasswordFile = "password.tmp"
+var tempPasswordFile = "/var/tmp/password.tmp"
 
 //Tests against httptest
 
@@ -75,7 +77,6 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 
 func getTokenResponse() *tokenResponse {
 	return &tokenResponse{
-		Success:  tokenSuccess,
 		Messages: []string{},
 		Token:    "tok-" + randString(20),
 	}
@@ -220,59 +221,98 @@ func TestAPIReportEvent(t *testing.T) {
 	assert.Equal(t, nil, err)
 }
 
-//createTempPasswordFile makes or rewrites supplied filename with password
-func createTempPasswordFile(filename, password string) error {
-	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0775)
-	f.Truncate(0)
-	f.Seek(0, 0)
-
-	defer f.Close()
-	if err != nil {
-		return err
-	}
-	_, err = f.WriteString(password)
-	return err
-}
-
-func readPassword(filename string) (string, error) {
-	content, err := ioutil.ReadFile(filename)
-	return string(content), err
-}
-
-func getLock(filename string) (*flock.Flock, bool, error) {
-	fileLock := flock.New(tempPasswordFile)
-	lockCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	locked, err := fileLock.TryLockContext(lockCtx, 678*time.Millisecond)
-	return fileLock, locked, err
-}
-
 func TestPasswordLock(t *testing.T) {
 	tempPassword := randString(20)
-	err := createTempPasswordFile(tempPasswordFile, tempPassword)
-	require.Equal(t, err, nil, "must be able to create/open "+tempPasswordFile)
+	confPassword := NewConfigPassword(tempPasswordFile)
+	anotherConfPassword := NewConfigPassword(tempPasswordFile)
 
-	fileLock, locked, err := getLock(tempPasswordFile)
-	require.True(t, locked, "File lock must succeed")
-	require.Equal(t, err, nil, "File lock must succeed")
-
-	err = WritePassword(tempPasswordFile, randString(20))
+	err := confPassword.WritePassword(tempPassword)
 	assert.NotEqual(t, nil, err)
-	fileLock.Unlock()
 
-	currentPassword, err := readPassword(tempPasswordFile)
-	assert.Equal(t, err, nil)
+	locked, err := confPassword.GetExLock()
+	defer confPassword.Unlock()
+	require.True(t, locked, "File lock must succeed")
+	require.Equal(t, nil, err, "must be able to get lock "+tempPasswordFile)
+
+	err = confPassword.WritePassword(tempPassword)
+	require.Equal(t, nil, err, "must be able to write to"+tempPasswordFile)
+
+	locked, err = anotherConfPassword.GetExLock()
+	assert.NotEqual(t, nil, err)
+	assert.False(t, locked)
+
+	err = anotherConfPassword.WritePassword(randString(20))
+	assert.NotEqual(t, nil, err)
+	confPassword.Unlock()
+
+	currentPassword, err := confPassword.ReadPassword()
+	assert.Equal(t, nil, err)
 	assert.Equal(t, tempPassword, currentPassword)
 
 	tempPassword = randString(20)
-	err = WritePassword(tempPasswordFile, tempPassword)
-	assert.Equal(t, err, nil)
+	locked, err = anotherConfPassword.GetExLock()
+	defer anotherConfPassword.Unlock()
+	assert.Equal(t, nil, err)
+	assert.True(t, locked)
 
-	currentPassword, err = readPassword(tempPasswordFile)
-	assert.Equal(t, err, nil)
-	assert.NotEqual(t, currentPassword, tempPassword)
+	err = anotherConfPassword.WritePassword(tempPassword)
+	assert.Equal(t, nil, err)
+
+	currentPassword, err = anotherConfPassword.ReadPassword()
+	assert.Equal(t, nil, err)
+	assert.Equal(t, tempPassword, currentPassword)
 
 	err = os.Remove(tempPasswordFile)
+}
+
+func createTestConfig() error {
+	conf := &Config{
+		ServerURL:  apiURL,
+		Group:      defaultGroup,
+		DeviceName: randString(10),
+	}
+	d, err := yaml.Marshal(conf)
+	if err != nil {
+		return err
+	}
+	err = ioutil.WriteFile(testConfig, d, 0600)
+	return err
+}
+
+// runMultipleRegistrations registers supplied count APIs on multiple threads
+// and returns a  channel in which the registered passwords will be supplied
+func runMultipleRegistrations(count int) (int, chan string) {
+	messages := make(chan string)
+
+	for i := 0; i < count; i++ {
+		go func() {
+			api, err := NewAPIFromConfig(testConfig)
+			if err != nil {
+				messages <- err.Error()
+			} else {
+				messages <- api.device.password
+			}
+		}()
+	}
+	return count, messages
+}
+
+func removeTestConfig() {
+	_ = os.Remove(testConfig)
+	_ = os.Remove(privConfigFilename(testConfig))
+}
+
+func TestMultipleRegistrations(t *testing.T) {
+	err := createTestConfig()
+	defer removeTestConfig()
+
+	require.Equal(t, nil, err, "Must be able to make test config "+testConfig)
+	count, passwords := runMultipleRegistrations(4)
+	password := <-passwords
+	for i := 1; i < count; i++ {
+		pass := <-passwords
+		assert.Equal(t, password, pass)
+	}
 }
 
 // getAPI returns a CacophonyAPI for testing purposes using provided url and password with random name
