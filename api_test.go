@@ -34,17 +34,16 @@ import (
 // tests against cacophony-api require apiURL to be pointing
 // to a valid cacophony-api server and test-seed.sql to be run
 
-var apiURL = "http://localhost:1080"
-var tokenSuccess = true
+const (
+	apiURL          = "http://localhost:1080"
+	defaultDevice   = "test-device"
+	defaultPassword = "test-password"
+	defaultGroup    = "test-group"
+)
+
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
-var testConfig = "/var/tmp/go-api-test-config.yaml"
-
-var defaultDevice = "test-device"
-var defaultPassword = "test-password"
-var defaultGroup = "test-group"
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
-var tempPasswordFile = "/var/tmp/password.tmp"
 
 //Tests against httptest
 
@@ -53,7 +52,7 @@ func TestRegistrationHttpRequest(t *testing.T) {
 	defer ts.Close()
 	api := getAPI(ts.URL, "", false)
 	err := api.register()
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 }
 
 func TestNewTokenHttpRequest(t *testing.T) {
@@ -62,7 +61,7 @@ func TestNewTokenHttpRequest(t *testing.T) {
 
 	api := getAPI(ts.URL, "", true)
 	err := api.authenticate()
-	assert.Equal(t, err, nil)
+	assert.NoError(t, err)
 }
 
 func TestUploadThermalRawHttpRequest(t *testing.T) {
@@ -72,7 +71,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
 	err := api.UploadThermalRaw(reader)
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 }
 
 func getTokenResponse() *tokenResponse {
@@ -96,9 +95,9 @@ func GetRegisterServer(t *testing.T) *httptest.Server {
 		requestJson := getJSONRequestMap(r)
 
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.NotEqual(t, "", requestJson["password"])
-		assert.NotEqual(t, "", requestJson["group"])
-		assert.NotEqual(t, "", requestJson["devicename"])
+		assert.NotEmpty(t, requestJson["password"])
+		assert.NotEmpty(t, requestJson["group"])
+		assert.NotEmpty(t, requestJson["devicename"])
 
 		w.WriteHeader(responseHeader)
 		w.Header().Set("Content-Type", "application/json")
@@ -115,8 +114,8 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 		requestJson := getJSONRequestMap(r)
 
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.NotEqual(t, "", requestJson["password"])
-		assert.NotEqual(t, "", requestJson["devicename"])
+		assert.NotEmpty(t, requestJson["password"])
+		assert.NotEmpty(t, requestJson["devicename"])
 
 		w.WriteHeader(responseHeader)
 		w.Header().Set("Content-Type", "application/json")
@@ -160,7 +159,7 @@ func getMimeParts(r *http.Request) (string, string) {
 func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
-		assert.NotEqual(t, nil, r.Header.Get("Authorization"))
+		assert.NotEmpty(t, r.Header.Get("Authorization"))
 
 		dataType, file := getMimeParts(r)
 		assert.Equal(t, "{\"type\":\"thermalRaw\"}", dataType)
@@ -176,25 +175,25 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 func TestAPIRegistration(t *testing.T) {
 	api := getAPI(apiURL, "", false)
 	err := api.authenticate()
-	assert.NotEqual(t, nil, err)
+	assert.Error(t, err)
 
 	err = api.register()
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 	assert.True(t, api.JustRegistered())
 	assert.NotEqual(t, "", api.device.password)
 	assert.NotEqual(t, "", api.token)
 	assert.True(t, api.JustRegistered())
 
 	err = api.authenticate()
-	assert.Equal(t, err, nil)
+	assert.NoError(t, err)
 }
 
 func TestAPIAuthenticate(t *testing.T) {
 	api := getAPI(apiURL, defaultPassword, false)
 	api.device.name = defaultDevice
 	err := api.authenticate()
-	assert.Equal(t, nil, err)
-	assert.NotEqual(t, "", api.token)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, api.token)
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
@@ -203,7 +202,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 
 	reader := strings.NewReader(rawThermalData)
 	err = api.UploadThermalRaw(reader)
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 }
 
 func getTestEvent() ([]byte, []time.Time) {
@@ -218,75 +217,96 @@ func TestAPIReportEvent(t *testing.T) {
 
 	details, timeStamps := getTestEvent()
 	err = api.ReportEvent(details, timeStamps)
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
+}
+
+func getTempPasswordConfig(t *testing.T) (string, func(), *ConfigPassword, *ConfigPassword) {
+	tmpFile, err := ioutil.TempFile("", "test-password")
+	require.NoError(t, err, "Must be able to create test password file")
+	tmpFile.Close()
+	cleanUpFunc := func() {
+		_ = os.Remove(tmpFile.Name())
+	}
+
+	confPassword := NewConfigPassword(tmpFile.Name())
+	anotherConfPassword := NewConfigPassword(tmpFile.Name())
+
+	return tmpFile.Name(), cleanUpFunc, confPassword, anotherConfPassword
 }
 
 func TestPasswordLock(t *testing.T) {
+	filename, cleanUp, confPassword, anotherConfPassword := getTempPasswordConfig(t)
+	defer cleanUp()
 	tempPassword := randString(20)
-	confPassword := NewConfigPassword(tempPasswordFile)
-	anotherConfPassword := NewConfigPassword(tempPasswordFile)
 
 	err := confPassword.WritePassword(tempPassword)
-	assert.NotEqual(t, nil, err)
+	assert.Error(t, err)
 
 	locked, err := confPassword.GetExLock()
 	defer confPassword.Unlock()
 	require.True(t, locked, "File lock must succeed")
-	require.Equal(t, nil, err, "must be able to get lock "+tempPasswordFile)
+	require.NoError(t, err, "must be able to get lock "+filename)
 
 	err = confPassword.WritePassword(tempPassword)
-	require.Equal(t, nil, err, "must be able to write to"+tempPasswordFile)
+	require.NoError(t, err, "must be able to write to"+filename)
 
 	locked, err = anotherConfPassword.GetExLock()
-	assert.NotEqual(t, nil, err)
+	assert.Error(t, err)
 	assert.False(t, locked)
 
 	err = anotherConfPassword.WritePassword(randString(20))
-	assert.NotEqual(t, nil, err)
+	assert.Error(t, err)
 	confPassword.Unlock()
 
 	currentPassword, err := confPassword.ReadPassword()
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 	assert.Equal(t, tempPassword, currentPassword)
 
 	tempPassword = randString(20)
 	locked, err = anotherConfPassword.GetExLock()
 	defer anotherConfPassword.Unlock()
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 	assert.True(t, locked)
 
 	err = anotherConfPassword.WritePassword(tempPassword)
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 
 	currentPassword, err = anotherConfPassword.ReadPassword()
-	assert.Equal(t, nil, err)
+	assert.NoError(t, err)
 	assert.Equal(t, tempPassword, currentPassword)
 
-	err = os.Remove(tempPasswordFile)
+	err = os.Remove(filename)
 }
 
-func createTestConfig() error {
+func createTestConfig(t *testing.T) (string, func()) {
 	conf := &Config{
 		ServerURL:  apiURL,
 		Group:      defaultGroup,
 		DeviceName: randString(10),
 	}
 	d, err := yaml.Marshal(conf)
-	if err != nil {
-		return err
+	require.NoError(t, err, "Must be able to make Config yaml")
+
+	tmpFile, err := ioutil.TempFile("", "test-config")
+	require.NoError(t, err, "Must be able to make test-config")
+
+	_, err = tmpFile.Write(d)
+	require.NoError(t, err, "Must be able to write to "+tmpFile.Name())
+
+	cleanUpFunc := func() {
+		removeTestConfig(tmpFile.Name())
 	}
-	err = ioutil.WriteFile(testConfig, d, 0600)
-	return err
+	return tmpFile.Name(), cleanUpFunc
 }
 
-// runMultipleRegistrations registers supplied count APIs on multiple threads
-// and returns a  channel in which the registered passwords will be supplied
-func runMultipleRegistrations(count int) (int, chan string) {
+// runMultipleRegistrations registers supplied count APIs with configFile on multiple threads
+// and returns a channel in which the registered passwords will be supplied
+func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 	messages := make(chan string)
 
 	for i := 0; i < count; i++ {
 		go func() {
-			api, err := NewAPIFromConfig(testConfig)
+			api, err := NewAPIFromConfig(configFile)
 			if err != nil {
 				messages <- err.Error()
 			} else {
@@ -297,17 +317,16 @@ func runMultipleRegistrations(count int) (int, chan string) {
 	return count, messages
 }
 
-func removeTestConfig() {
-	_ = os.Remove(testConfig)
-	_ = os.Remove(privConfigFilename(testConfig))
+func removeTestConfig(configFile string) {
+	_ = os.Remove(configFile)
+	_ = os.Remove(privConfigFilename(configFile))
 }
 
 func TestMultipleRegistrations(t *testing.T) {
-	err := createTestConfig()
-	defer removeTestConfig()
+	configFile, cleanUp := createTestConfig(t)
+	defer cleanUp()
 
-	require.Equal(t, nil, err, "Must be able to make test config "+testConfig)
-	count, passwords := runMultipleRegistrations(4)
+	count, passwords := runMultipleRegistrations(configFile, 4)
 	password := <-passwords
 	for i := 1; i < count; i++ {
 		pass := <-passwords
