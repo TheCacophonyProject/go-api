@@ -169,6 +169,7 @@ func (api *CacophonyAPI) authenticate() error {
 	}
 	payload, err := json.Marshal(map[string]string{
 		"devicename": api.device.name,
+		"groupname":  api.device.group,
 		"password":   api.device.password,
 	})
 	if err != nil {
