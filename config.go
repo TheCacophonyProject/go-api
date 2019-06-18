@@ -33,6 +33,7 @@ type Config struct {
 	ServerURL  string `yaml:"server-url"`
 	Group      string `yaml:"group"`
 	DeviceName string `yaml:"device-name"`
+	DeviceID   int    `yaml:"device-id"`
 }
 
 type PrivateConfig struct {
@@ -51,6 +52,17 @@ func (conf *Config) Validate() error {
 		return errors.New("device-name missing")
 	}
 	return nil
+}
+
+//SaveConfigFile writes config to supplied filename
+func (conf *Config) SaveConfigFile(filename string) error {
+	buf, err := yaml.Marshal(&conf)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(filename, buf, 0600)
+	return err
 }
 
 //ParseConfig takes supplied filename and returns a parsed Config struct
