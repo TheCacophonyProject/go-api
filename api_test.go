@@ -116,8 +116,7 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.NotEmpty(t, requestJson["password"])
-		assert.NotEmpty(t, requestJson["devicename"])
-		assert.NotEmpty(t, requestJson["deviceID"])
+		assert.True(t, (requestJson["groupname"] != "" && requestJson["devicename"] != "") || requestJson["deviceID"] != "")
 
 		w.WriteHeader(responseHeader)
 		w.Header().Set("Content-Type", "application/json")
