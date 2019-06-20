@@ -32,10 +32,10 @@ import (
 const deviceConfigPath = "/etc/cacophony/device.yml"
 
 type Config struct {
-	ServerURL  string `yaml:"server-url"`
-	Group      string `yaml:"group"`
-	DeviceName string `yaml:"device-name"`
-	DeviceID   int    `yaml:"device-id"`
+	ServerURL  string `yaml:"server-url" json:"serverURL"`
+	Group      string `yaml:"group" json:"groupname"`
+	DeviceName string `yaml:"device-name" json:"devicename"`
+	DeviceID   int    `yaml:"device-id" json:"deviceID"`
 }
 
 type PrivateConfig struct {
