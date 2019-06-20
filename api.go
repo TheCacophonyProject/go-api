@@ -125,8 +125,6 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 			return nil, err
 		}
 
-		conf.DeviceID = api.device.id
-		err = conf.SaveToFile(configFile)
 		if err != nil {
 			return nil, err
 		}
