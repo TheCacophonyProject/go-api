@@ -301,6 +301,18 @@ func createTestConfig(t *testing.T) (string, func()) {
 	return tmpFile.Name(), cleanUpFunc
 }
 
+func TestConfigFile(t *testing.T) {
+	configFile, cleanUp := createTestConfig(t)
+	defer cleanUp()
+	defer clearConfig()
+	_, err := NewAPIFromConfig(configFile, true)
+	assert.NoError(t, err)
+	//check device config loaded
+	_, err = os.Stat(deviceConfigPath)
+	assert.NoError(t, err)
+
+}
+
 // runMultipleRegistrations registers supplied count APIs with configFile on multiple threads
 // and returns a channel in which the registered passwords will be supplied
 func runMultipleRegistrations(configFile string, count int) (int, chan string) {
@@ -308,7 +320,7 @@ func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 
 	for i := 0; i < count; i++ {
 		go func() {
-			api, err := NewAPIFromConfig(configFile)
+			api, err := NewAPIFromConfig(configFile, false)
 			if err != nil {
 				messages <- err.Error()
 			} else {
@@ -319,6 +331,11 @@ func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 	return count, messages
 }
 
+func clearConfig() {
+	_ = os.Remove(deviceConfigPath)
+	_ = os.Remove(privConfigFilename(deviceConfigPath))
+}
+
 func removeTestConfig(configFile string) {
 	_ = os.Remove(configFile)
 	_ = os.Remove(privConfigFilename(configFile))
@@ -327,7 +344,7 @@ func removeTestConfig(configFile string) {
 func TestMultipleRegistrations(t *testing.T) {
 	configFile, cleanUp := createTestConfig(t)
 	defer cleanUp()
-
+	defer clearConfig()
 	count, passwords := runMultipleRegistrations(configFile, 4)
 	password := <-passwords
 	for i := 1; i < count; i++ {

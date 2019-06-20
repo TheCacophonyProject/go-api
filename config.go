@@ -29,6 +29,8 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+const deviceConfigPath = "/etc/cacophony/device.yml"
+
 type Config struct {
 	ServerURL  string `yaml:"server-url"`
 	Group      string `yaml:"group"`
@@ -40,31 +42,49 @@ type PrivateConfig struct {
 	Password string `yaml:"password"`
 }
 
+// CreateDeviceConfig from filename, only if overwrite set or doesn't exist
+func CreateDeviceConfig(filename string, overwrite bool) (*Config, error) {
+	_, err := os.Stat(deviceConfigPath)
+	conf := &Config{}
+	if err != nil || overwrite {
+		conf, err = ParseConfigFile(filename)
+		if err != nil {
+			return conf, err
+		}
+		err = conf.Save()
+	} else {
+		conf, err = LoadConfig()
+	}
+	return conf, err
+}
+
 //Validate checks supplied Config contains the required data
 func (conf *Config) Validate() error {
 	if conf.ServerURL == "" {
 		return errors.New("server-url missing")
 	}
-	if conf.Group == "" {
-		return errors.New("group missing")
-	}
-	if conf.DeviceName == "" {
-		return errors.New("device-name missing")
+
+	if (conf.Group == "" || conf.DeviceName == "") && conf.DeviceID == 0 {
+		return errors.New("device-info missing")
 	}
 	return nil
 }
 
-//SaveToFile writes config to supplied filename
-func (conf *Config) SaveToFile(filename string) error {
+//Save writes config to deviceConfig
+func (conf *Config) Save() error {
 	buf, err := yaml.Marshal(&conf)
 	if err != nil {
 		return err
 	}
-
-	return ioutil.WriteFile(filename, buf, 0600)
+	return ioutil.WriteFile(deviceConfigPath, buf, 0600)
 }
 
-//ParseConfig takes supplied filename and returns a parsed Config struct
+// LoadConfig from deviceConfigPath
+func LoadConfig() (*Config, error) {
+	return ParseConfigFile(deviceConfigPath)
+}
+
+//ParseConfig takes supplied filenam)e and returns a parsed Config struct
 func ParseConfigFile(filename string) (*Config, error) {
 	buf, err := ioutil.ReadFile(filename)
 	if err != nil {

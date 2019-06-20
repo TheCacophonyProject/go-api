@@ -86,14 +86,32 @@ func (api *CacophonyAPI) JustRegistered() bool {
 	return api.justRegistered
 }
 
-// NewAPIFromConfig prases the supplied configFile and creates a new CacophonyAPI with the configFile information
+// NewAPIFromConfig parses file name into deviceConfigPath if it doesn't exist or overwrite set
+// and creates a new CacophonyAPI with the configFile information
 // and saves the generated password to privConfigFileName(configFile)
-func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
-	conf, err := ParseConfigFile(configFile)
+func NewAPIFromConfig(filename string, overwrite bool) (*CacophonyAPI, error) {
+	conf, err := CreateDeviceConfig(filename, overwrite)
 	if err != nil {
 		return nil, fmt.Errorf("configuration error: %v", err)
 	}
-	privConfigFilename := privConfigFilename(configFile)
+	return apiFromConfig(conf)
+}
+
+// NewAPIFromConfig parses deviceConfigPath and creates a new CacophonyAPI with the configFile information
+// and saves the generated password to privConfigFileName(configFile)
+func NewAPI() (*CacophonyAPI, error) {
+	conf, err := LoadConfig()
+	if err != nil {
+		return nil, fmt.Errorf("configuration error: %v", err)
+	}
+	return apiFromConfig(conf)
+}
+
+// apiFromConfig creates CacophonyAPI from Config and register/authenticates
+// saving the password if necessary
+func apiFromConfig(conf *Config) (*CacophonyAPI, error) {
+
+	privConfigFilename := privConfigFilename(deviceConfigPath)
 	confPassword := NewConfigPassword(privConfigFilename)
 
 	password, err := confPassword.ReadPassword()
@@ -108,65 +126,56 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 		}
 		defer confPassword.Unlock()
 
-		//read again incase was just written to while waiting for exlock
+		//read again in case was just written to while waiting for exlock
 		password, err = confPassword.ReadPassword()
 		if err != nil {
 			return nil, err
 		}
 	}
-	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, conf.DeviceID, password)
-	if err != nil {
-		return nil, err
-	}
-
-	if api.JustRegistered() {
-		err := confPassword.WritePassword(api.Password())
-		if err != nil {
-			return nil, err
-		}
-
-		conf.DeviceID = api.device.id
-		err = conf.SaveToFile(configFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return api, nil
-}
-
-// createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
-// Token. If no password is given then the device is registered.
-func NewAPI(serverURL, group, deviceName string, deviceID int, password string) (*CacophonyAPI, error) {
-
-	if deviceName == "" {
-		return nil, errors.New("no device name")
-	}
 
 	device := &CacophonyDevice{
-		group:    group,
-		name:     deviceName,
+		group:    conf.Group,
+		name:     conf.DeviceName,
 		password: password,
-		id:       deviceID,
+		id:       conf.DeviceID,
 	}
 
 	api := &CacophonyAPI{
-		serverURL:  serverURL,
+		serverURL:  conf.ServerURL,
 		device:     device,
 		httpClient: newHTTPClient(),
 	}
 
-	if device.password == "" {
+	err = api.registerOrAuthenticate(conf, confPassword)
+	return api, err
+}
+
+// createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
+// Token. If no password is given then the device is registered.
+func (api *CacophonyAPI) registerOrAuthenticate(conf *Config, confPassword *ConfigPassword) error {
+
+	if api.device.password == "" {
 		err := api.register()
 		if err != nil {
-			return nil, err
+			return err
+		}
+		err = confPassword.WritePassword(api.Password())
+		if err != nil {
+			return err
+		}
+
+		conf.DeviceID = api.device.id
+		err = conf.Save()
+		if err != nil {
+			return err
 		}
 	} else {
 		err := api.authenticate()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
-	return api, nil
+	return nil
 }
 
 // authenticate a device with Cacophony API and retrieves the token
