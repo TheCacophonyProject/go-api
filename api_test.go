@@ -83,7 +83,7 @@ func getTokenResponse() *tokenResponse {
 }
 
 func getJSONRequestMap(r *http.Request) map[string]interface{} {
-	var requestJson = map[string]interface{}{}
+	var requestJson map[string]interface{}
 	decoder := json.NewDecoder(r.Body)
 	decoder.Decode(&requestJson)
 	return requestJson
