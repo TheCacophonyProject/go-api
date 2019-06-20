@@ -114,7 +114,7 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 			return nil, err
 		}
 	}
-	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, 0, password)
+	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, conf.DeviceID, password)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 		}
 
 		conf.DeviceID = api.device.id
-		err = conf.SaveConfigFile(configFile)
+		err = conf.SaveToFile(configFile)
 		if err != nil {
 			return nil, err
 		}
@@ -176,12 +176,16 @@ func (api *CacophonyAPI) authenticate() error {
 		return errors.New("no password set")
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
-		"deviceID":   api.device.id,
-		"devicename": api.device.name,
-		"groupname":  api.device.group,
-		"password":   api.device.password,
-	})
+	data := map[string]interface{}{
+		"password": api.device.password,
+	}
+	if api.device.id > 0 {
+		data["deviceID"] = api.device.id
+	} else {
+		data["devicename"] = api.device.name
+		data["groupname"] = api.device.group
+	}
+	payload, err := json.Marshal(data)
 
 	if err != nil {
 		return err

@@ -54,15 +54,14 @@ func (conf *Config) Validate() error {
 	return nil
 }
 
-//SaveConfigFile writes config to supplied filename
-func (conf *Config) SaveConfigFile(filename string) error {
+//SaveToFile writes config to supplied filename
+func (conf *Config) SaveToFile(filename string) error {
 	buf, err := yaml.Marshal(&conf)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(filename, buf, 0600)
-	return err
+	return ioutil.WriteFile(filename, buf, 0600)
 }
 
 //ParseConfig takes supplied filename and returns a parsed Config struct

@@ -355,6 +355,7 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 		api.device.password = randString(20)
 		api.token = "tok-" + randString(20)
 		api.justRegistered = true
+		api.device.id = 1
 	}
 	return api
 }
