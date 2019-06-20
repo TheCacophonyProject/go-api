@@ -44,6 +44,7 @@ type CacophonyDevice struct {
 	group    string
 	name     string
 	password string
+	id       int
 }
 
 type CacophonyAPI struct {
@@ -113,7 +114,7 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 			return nil, err
 		}
 	}
-	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, password)
+	api, err := NewAPI(conf.ServerURL, conf.Group, conf.DeviceName, conf.DeviceID, password)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +124,17 @@ func NewAPIFromConfig(configFile string) (*CacophonyAPI, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		if err != nil {
+			return nil, err
+		}
 	}
 	return api, nil
 }
 
 // createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
 // Token. If no password is given then the device is registered.
-func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error) {
+func NewAPI(serverURL, group, deviceName string, deviceID int, password string) (*CacophonyAPI, error) {
 
 	if deviceName == "" {
 		return nil, errors.New("no device name")
@@ -139,6 +144,7 @@ func NewAPI(serverURL, group, deviceName, password string) (*CacophonyAPI, error
 		group:    group,
 		name:     deviceName,
 		password: password,
+		id:       deviceID,
 	}
 
 	api := &CacophonyAPI{
@@ -167,11 +173,18 @@ func (api *CacophonyAPI) authenticate() error {
 	if api.device.password == "" {
 		return errors.New("no password set")
 	}
-	payload, err := json.Marshal(map[string]string{
-		"devicename": api.device.name,
-		"groupname":  api.device.group,
-		"password":   api.device.password,
-	})
+
+	data := map[string]interface{}{
+		"password": api.device.password,
+	}
+	if api.device.id > 0 {
+		data["deviceID"] = api.device.id
+	} else {
+		data["devicename"] = api.device.name
+		data["groupname"] = api.device.group
+	}
+	payload, err := json.Marshal(data)
+
 	if err != nil {
 		return err
 	}
@@ -253,7 +266,7 @@ func (api *CacophonyAPI) register() error {
 	if err := d.Decode(&respData); err != nil {
 		return fmt.Errorf("decode: %v", err)
 	}
-
+	api.device.id = respData.ID
 	api.device.password = password
 	api.token = respData.Token
 	api.justRegistered = true
@@ -309,6 +322,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
 type tokenResponse struct {
 	Messages []string
 	Token    string
+	ID       int
 }
 
 // message gets the first message of the supplised tokenResponse if present

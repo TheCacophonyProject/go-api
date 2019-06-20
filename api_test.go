@@ -78,11 +78,12 @@ func getTokenResponse() *tokenResponse {
 	return &tokenResponse{
 		Messages: []string{},
 		Token:    "tok-" + randString(20),
+		ID:       1,
 	}
 }
 
-func getJSONRequestMap(r *http.Request) map[string]string {
-	var requestJson = map[string]string{}
+func getJSONRequestMap(r *http.Request) map[string]interface{} {
+	var requestJson map[string]interface{}
 	decoder := json.NewDecoder(r.Body)
 	decoder.Decode(&requestJson)
 	return requestJson
@@ -115,7 +116,7 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.NotEmpty(t, requestJson["password"])
-		assert.NotEmpty(t, requestJson["devicename"])
+		assert.True(t, (requestJson["groupname"] != "" && requestJson["devicename"] != "") || requestJson["deviceID"] != "")
 
 		w.WriteHeader(responseHeader)
 		w.Header().Set("Content-Type", "application/json")
@@ -181,6 +182,7 @@ func TestAPIRegistration(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, api.JustRegistered())
 	assert.NotEqual(t, "", api.device.password)
+	// assert.NotEqual(t, 0, api.device.id)
 	assert.NotEqual(t, "", api.token)
 	assert.True(t, api.JustRegistered())
 
@@ -353,6 +355,7 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 		api.device.password = randString(20)
 		api.token = "tok-" + randString(20)
 		api.justRegistered = true
+		api.device.id = 1
 	}
 	return api
 }
