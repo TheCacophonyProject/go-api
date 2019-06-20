@@ -307,7 +307,7 @@ func TestConfigFile(t *testing.T) {
 	defer clearConfig()
 	_, err := NewAPIFromConfig(configFile, true)
 	assert.NoError(t, err)
-	//check device config loaded
+	//check device config saved
 	_, err = os.Stat(deviceConfigPath)
 	assert.NoError(t, err)
 

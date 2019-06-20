@@ -49,7 +49,7 @@ func CreateDeviceConfig(filename string, overwrite bool) (*Config, error) {
 	if err != nil || overwrite {
 		conf, err = ParseConfigFile(filename)
 		if err != nil {
-			return conf, err
+			return nil, err
 		}
 		err = conf.Save()
 	} else {
