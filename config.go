@@ -62,7 +62,7 @@ func (conf *Config) Validate() error {
 	}
 
 	if conf.DeviceName == "" {
-		return errors.New("device-info missing")
+		return errors.New("device-name missing")
 	}
 	return nil
 }
@@ -99,7 +99,6 @@ type LockSafeConfig struct {
 	fileLock *flock.Flock
 	filename string
 	config   *PrivateConfig
-	password string
 }
 
 func NewLockSafeConfig(filename string) *LockSafeConfig {
