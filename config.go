@@ -19,43 +19,40 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/spf13/afero"
 	yaml "gopkg.in/yaml.v2"
 )
 
-const deviceConfigPath = "/etc/cacophony/device.yml"
+const (
+	deviceConfigPath     = "/etc/cacophony/device.yaml"
+	registeredConfigPath = "/etc/cacophony/device-priv.yaml"
+)
 
 type Config struct {
 	ServerURL  string `yaml:"server-url" json:"serverURL"`
 	Group      string `yaml:"group" json:"groupname"`
 	DeviceName string `yaml:"device-name" json:"devicename"`
-	DeviceID   int    `yaml:"device-id" json:"deviceID"`
 }
 
 type PrivateConfig struct {
 	Password string `yaml:"password"`
+	DeviceID int    `yaml:"device-id" json:"deviceID"`
 }
 
-// CreateDeviceConfig from filename, only if overwrite set or doesn't exist
-func CreateDeviceConfig(filename string, overwrite bool) (*Config, error) {
-	_, err := os.Stat(deviceConfigPath)
-	conf := &Config{}
-	if err != nil || overwrite {
-		conf, err = ParseConfigFile(filename)
-		if err != nil {
-			return nil, err
-		}
-		err = conf.Save()
-	} else {
-		conf, err = LoadConfig()
+//Validate checks supplied Config contains the required data
+func (conf *PrivateConfig) IsValid() bool {
+	if conf.Password == "" {
+		return false
 	}
-	return conf, err
+
+	if conf.DeviceID == 0 {
+		return false
+	}
+	return true
 }
 
 //Validate checks supplied Config contains the required data
@@ -64,29 +61,15 @@ func (conf *Config) Validate() error {
 		return errors.New("server-url missing")
 	}
 
-	if (conf.Group == "" || conf.DeviceName == "") && conf.DeviceID == 0 {
+	if conf.DeviceName == "" {
 		return errors.New("device-info missing")
 	}
 	return nil
 }
 
-//Save writes config to deviceConfig
-func (conf *Config) Save() error {
-	buf, err := yaml.Marshal(&conf)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(deviceConfigPath, buf, 0600)
-}
-
-// LoadConfig from deviceConfigPath
+// LoadConfig from deviceConfigPath with a read lock
 func LoadConfig() (*Config, error) {
-	return ParseConfigFile(deviceConfigPath)
-}
-
-//ParseConfig takes supplied filenam)e and returns a parsed Config struct
-func ParseConfigFile(filename string) (*Config, error) {
-	buf, err := ioutil.ReadFile(filename)
+	buf, err := afero.ReadFile(Fs, deviceConfigPath)
 	if err != nil {
 		return nil, err
 	}
@@ -107,33 +90,34 @@ func ParseConfig(buf []byte) (*Config, error) {
 }
 
 const (
-	lockfile       = "/var/lock/go-api-config.lock"
+	lockfile       = "/var/lock/go-api-priv.lock"
 	lockRetryDelay = 678 * time.Millisecond
 	lockTimeout    = 5 * time.Second
 )
 
-type ConfigPassword struct {
+type LockSafeConfig struct {
 	fileLock *flock.Flock
 	filename string
+	config   *PrivateConfig
 	password string
 }
 
-func NewConfigPassword(filename string) *ConfigPassword {
-	return &ConfigPassword{
+func NewLockSafeConfig(filename string) *LockSafeConfig {
+	return &LockSafeConfig{
 		filename: filename,
 		fileLock: flock.New(lockfile),
 	}
 }
 
-func (confPassword *ConfigPassword) Unlock() {
-	confPassword.fileLock.Unlock()
+func (lockSafeConfig *LockSafeConfig) Unlock() {
+	lockSafeConfig.fileLock.Unlock()
 }
 
 // GetExLock acquires an exclusive lock on confPassword
-func (confPassword *ConfigPassword) GetExLock() (bool, error) {
+func (lockSafeConfig *LockSafeConfig) GetExLock() (bool, error) {
 	lockCtx, cancel := context.WithTimeout(context.Background(), lockTimeout)
 	defer cancel()
-	locked, err := confPassword.fileLock.TryLockContext(lockCtx, lockRetryDelay)
+	locked, err := lockSafeConfig.fileLock.TryLockContext(lockCtx, lockRetryDelay)
 	return locked, err
 }
 
@@ -145,49 +129,42 @@ func getReadLock(fileLock *flock.Flock) (bool, error) {
 	return locked, err
 }
 
-// ReadPassword acquires a readlock and reads the password
-func (confPassword *ConfigPassword) ReadPassword() (string, error) {
-	locked := confPassword.fileLock.Locked()
+// ReadPassword acquires a readlock and reads the config
+func (lockSafeConfig *LockSafeConfig) Read() (*PrivateConfig, error) {
+	locked := lockSafeConfig.fileLock.Locked()
 	if locked == false {
-		locked, err := getReadLock(confPassword.fileLock)
+		locked, err := getReadLock(lockSafeConfig.fileLock)
 		if locked == false || err != nil {
-			return "", err
+			return nil, err
 		}
-		defer confPassword.Unlock()
+		defer lockSafeConfig.Unlock()
 	}
 
-	buf, err := ioutil.ReadFile(confPassword.filename)
+	buf, err := afero.ReadFile(Fs, lockSafeConfig.filename)
 	if os.IsNotExist(err) {
-		return "", nil
+		return nil, nil
 	} else if err != nil {
-		return "", err
+		return nil, err
 	}
-	var conf PrivateConfig
-	if err := yaml.Unmarshal(buf, &conf); err != nil {
-		return "", err
+	if err := yaml.Unmarshal(buf, &lockSafeConfig.config); err != nil {
+		return nil, err
 	}
-	return conf.Password, nil
+	return lockSafeConfig.config, nil
 }
 
 // WritePassword checks the file is locked and writes the password
-func (confPassword *ConfigPassword) WritePassword(password string) error {
-	conf := PrivateConfig{Password: password}
+func (lockSafeConfig *LockSafeConfig) Write(deviceID int, password string) error {
+	conf := PrivateConfig{DeviceID: deviceID, Password: password}
 	buf, err := yaml.Marshal(&conf)
 	if err != nil {
 		return err
 	}
-	if confPassword.fileLock.Locked() {
-		err = ioutil.WriteFile(confPassword.filename, buf, 0600)
+	if lockSafeConfig.fileLock.Locked() {
+		err = afero.WriteFile(Fs, lockSafeConfig.filename, buf, 0600)
 	} else {
-		return fmt.Errorf("WritePassword could not get file lock %v", confPassword.filename)
+		return fmt.Errorf("WritePassword could not get file lock %v", lockSafeConfig.filename)
 	}
 	return err
 }
 
-// privConfigFilename take a configFile and creates an associated
-// file to store the password in with suffix -priv.yaml
-func privConfigFilename(configFile string) string {
-	dirname, filename := filepath.Split(configFile)
-	bareFilename := strings.TrimSuffix(filename, ".yaml")
-	return filepath.Join(dirname, bareFilename+"-priv.yaml")
-}
+var Fs = afero.NewOsFs()
