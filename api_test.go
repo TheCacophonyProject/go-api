@@ -281,7 +281,7 @@ func TestPasswordLock(t *testing.T) {
 }
 
 //createTestConfig creates device.yaml
-func createTestConfig(t *testing.T) (string, func()) {
+func createTestConfig(t *testing.T) string {
 	conf := &Config{
 		ServerURL:  apiURL,
 		Group:      defaultGroup,
@@ -293,16 +293,12 @@ func createTestConfig(t *testing.T) (string, func()) {
 	Fs = afero.NewMemMapFs()
 	afero.WriteFile(Fs, deviceConfigPath, d, 0600)
 
-	cleanUpFunc := func() {
-		removeConfig()
-	}
-	return deviceConfigPath, cleanUpFunc
+	return deviceConfigPath
 }
 
 // TestConfigFile test registered config is created with deviceid and password
 func TestConfigFile(t *testing.T) {
-	_, cleanUp := createTestConfig(t)
-	defer cleanUp()
+	_ = createTestConfig(t)
 	_, err := NewAPI()
 	assert.NoError(t, err)
 	lockSafeConfig := NewLockSafeConfig(registeredConfigPath)
@@ -339,8 +335,7 @@ func removeConfig() {
 }
 
 func TestMultipleRegistrations(t *testing.T) {
-	configFile, cleanUp := createTestConfig(t)
-	defer cleanUp()
+	configFile := createTestConfig(t)
 	count, passwords := runMultipleRegistrations(configFile, 4)
 	password := <-passwords
 	for i := 1; i < count; i++ {
