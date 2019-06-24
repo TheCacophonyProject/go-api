@@ -95,6 +95,12 @@ const (
 	lockTimeout    = 5 * time.Second
 )
 
+// LoadPrivateConfig acquires a readlock and reads private config
+func LoadPrivateConfig() (*PrivateConfig, error) {
+	lockSafeConfig := NewLockSafeConfig(registeredConfigPath)
+	return lockSafeConfig.Read()
+}
+
 type LockSafeConfig struct {
 	fileLock *flock.Flock
 	filename string
