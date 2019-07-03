@@ -337,15 +337,17 @@ func (r *tokenResponse) message() string {
 
 // getFileFromJWT downloads a file from the Cacophony API using supplied JWT
 // and saves it to the supplied path
-func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
-	out, err := os.Create(path)
+func (api *CacophonyAPI) getFileFromJWT(jwt, filePath string) error {
+	// Get the data
+	u, err := url.Parse(api.serverURL)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-
-	// Get the data
-	resp, err := http.Get(joinURL(api.serverURL, apiBasePath, "/signedUrl?jwt="+jwt))
+	u.Path = path.Join(apiBasePath, "/signedUrl")
+	params := url.Values{}
+	params.Add("jwt", jwt)
+	u.RawQuery = params.Encode()
+	resp, err := http.Get(u.String())
 	if err != nil {
 		return err
 	}
@@ -357,8 +359,14 @@ func (api *CacophonyAPI) getFileFromJWT(jwt, path string) error {
 	}
 
 	// Writer the body to file
+	out, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
+		os.Remove(filePath)
 		return err
 	}
 
