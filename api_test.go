@@ -16,12 +16,16 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -36,14 +40,18 @@ import (
 // to a valid cacophony-api server and test-seed.sql to be run
 
 const (
-	apiURL          = "http://localhost:1080"
-	defaultDevice   = "test-device"
-	defaultPassword = "test-password"
-	defaultGroup    = "test-group"
+	apiURL              = "http://localhost:1080"
+	defaultDevice       = "test-device"
+	defaultPassword     = "test-password"
+	defaultGroup        = "test-group"
+	defaultUsername     = "go-api-user-test"
+	defaultuserPassword = "test-user-password"
+	filesURL            = "/files"
 )
 
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
+var rawFileData = randString(100)
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
 //Tests against httptest
@@ -361,4 +369,100 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 		api.device.id = 1
 	}
 	return api
+}
+
+func getUserToken() (string, error) {
+	data := map[string]interface{}{
+		"username": defaultUsername,
+		"password": defaultuserPassword,
+	}
+	payload, _ := json.Marshal(data)
+	httpClient := newHTTPClient()
+	postResp, err := httpClient.Post(
+		joinURL(apiURL, "/authenticate_user"),
+		"application/json",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return "", err
+	}
+	defer postResp.Body.Close()
+
+	if err := handleHTTPResponse(postResp); err != nil {
+		return "", err
+	}
+	var resp tokenResponse
+	d := json.NewDecoder(postResp.Body)
+	if err := d.Decode(&resp); err != nil {
+		return "", fmt.Errorf("decode: %v", err)
+	}
+	return resp.Token, nil
+}
+
+func TestFileDownload(t *testing.T) {
+	token, err := getUserToken()
+	assert.NoError(t, err)
+
+	fileID, err := uploadFile(token)
+	assert.NoError(t, err)
+
+	api := getAPI(apiURL, "", false)
+	err = api.register()
+	assert.NoError(t, err)
+
+	filePath := path.Join(os.TempDir(), randString(10))
+	defer os.Remove(filePath)
+	fileResponse, err := api.GetFileDetails(fileID)
+	assert.NoError(t, err)
+	err = api.DownloadFile(fileResponse, filePath)
+	assert.NoError(t, err)
+
+	fileData, err := ioutil.ReadFile(filePath)
+	assert.NoError(t, err)
+	assert.Equal(t, rawFileData, string(fileData))
+}
+
+func uploadFile(userToken string) (int, error) {
+	buf := new(bytes.Buffer)
+	w := multipart.NewWriter(buf)
+	dataBuf, err := json.Marshal(map[string]string{
+		"type": "audiobait",
+	})
+	if err != nil {
+		return 0, err
+	}
+	if err := w.WriteField("data", string(dataBuf)); err != nil {
+		return 0, err
+	}
+
+	fw, err := w.CreateFormFile("file", "file")
+	if err != nil {
+		return 0, err
+	}
+	r := strings.NewReader(rawFileData)
+	io.Copy(fw, r)
+	w.Close()
+
+	url := joinURL(apiURL, apiBasePath, filesURL)
+	req, err := http.NewRequest("POST", url, buf)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", userToken)
+
+	httpClient := newHTTPClient()
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	d := json.NewDecoder(resp.Body)
+	var respData fileUploadResponse
+	if err := d.Decode(&respData); err != nil {
+		return 0, fmt.Errorf("decode: %v", err)
+	}
+	return respData.RecordingId, nil
 }

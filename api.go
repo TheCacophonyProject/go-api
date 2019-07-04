@@ -326,6 +326,12 @@ type tokenResponse struct {
 	ID       int
 }
 
+type fileUploadResponse struct {
+	RecordingId int
+	Success     bool
+	Messages    []string
+}
+
 // message gets the first message of the supplised tokenResponse if present
 // otherwise default of "unknown"
 func (r *tokenResponse) message() string {
