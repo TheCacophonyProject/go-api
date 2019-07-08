@@ -16,12 +16,15 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"strings"
 	"testing"
 	"time"
@@ -36,14 +39,18 @@ import (
 // to a valid cacophony-api server and test-seed.sql to be run
 
 const (
-	apiURL          = "http://localhost:1080"
-	defaultDevice   = "test-device"
-	defaultPassword = "test-password"
-	defaultGroup    = "test-group"
+	apiURL              = "http://localhost:1080"
+	defaultDevice       = "test-device"
+	defaultPassword     = "test-password"
+	defaultGroup        = "test-group"
+	defaultUsername     = "go-api-user-test"
+	defaultuserPassword = "test-user-password"
+	filesURL            = "/files"
 )
 
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
+var rawFileData = randString(100)
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
 //Tests against httptest
@@ -361,4 +368,83 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 		api.device.id = 1
 	}
 	return api
+}
+
+func TestFileDownload(t *testing.T) {
+	token := getUserToken(t)
+
+	fileID := uploadFile(token, t)
+
+	api := getAPI(apiURL, "", false)
+	assert.NoError(t, api.register())
+
+	filePath := path.Join(os.TempDir(), randString(10))
+	defer os.Remove(filePath)
+	fileResponse, err := api.GetFileDetails(fileID)
+	assert.NoError(t, err)
+	err = api.DownloadFile(fileResponse, filePath)
+	assert.NoError(t, err)
+
+	fileData, err := ioutil.ReadFile(filePath)
+	assert.NoError(t, err)
+	assert.Equal(t, rawFileData, string(fileData))
+}
+
+func uploadFile(userToken string, t *testing.T) int {
+	buf := new(bytes.Buffer)
+	w := multipart.NewWriter(buf)
+	dataBuf, err := json.Marshal(map[string]string{
+		"type": "audiobait",
+	})
+	assert.NoError(t, err)
+	assert.NoError(t, w.WriteField("data", string(dataBuf)))
+
+	fw, err := w.CreateFormFile("file", "file")
+	assert.NoError(t, err)
+
+	r := strings.NewReader(rawFileData)
+	io.Copy(fw, r)
+	w.Close()
+
+	url := joinURL(apiURL, apiBasePath, filesURL)
+	req, err := http.NewRequest("POST", url, buf)
+	assert.NoError(t, err)
+
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Authorization", userToken)
+
+	resp, err := newHTTPClient().Do(req)
+	assert.NoError(t, err)
+	defer resp.Body.Close()
+
+	d := json.NewDecoder(resp.Body)
+	var respData fileUploadResponse
+	assert.NoError(t, d.Decode(&respData))
+	return respData.RecordingId
+}
+
+// getUserToken is needed for testing purposes to be able to upload files as a
+// user so TestFileDownload can be properly tested.
+func getUserToken(t *testing.T) string {
+	data := map[string]interface{}{
+		"username": defaultUsername,
+		"password": defaultuserPassword,
+	}
+	payload, err := json.Marshal(data)
+	assert.NoError(t, err)
+	httpClient := newHTTPClient()
+	postResp, err := httpClient.Post(
+		joinURL(apiURL, "/authenticate_user"),
+		"application/json",
+		bytes.NewReader(payload),
+	)
+	assert.NoError(t, err)
+	defer postResp.Body.Close()
+
+	assert.NoError(t, handleHTTPResponse(postResp))
+
+	var resp tokenResponse
+	d := json.NewDecoder(postResp.Body)
+	assert.NoError(t, d.Decode(&resp))
+	return resp.Token
 }
