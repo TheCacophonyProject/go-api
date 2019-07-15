@@ -306,14 +306,14 @@ func createTestConfig(t *testing.T) string {
 // TestConfigFile test registered config is created with deviceid and password
 func TestConfigFile(t *testing.T) {
 	_ = createTestConfig(t)
-	_, err := ApiFromRegister()
+	_, err := Register()
 	assert.NoError(t, err)
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
 	config, err := lockSafeConfig.Read()
 	require.NoError(t, err, "Must be able to read "+RegisteredConfigPath)
 	assert.NotEmpty(t, config.Password)
 
-	_, err = ApiFromAuthenticate()
+	_, err = New()
 	assert.NoError(t, err)
 }
 
@@ -324,7 +324,7 @@ func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 
 	for i := 0; i < count; i++ {
 		go func() {
-			api, err := ApiFromAuthenticate()
+			api, err := New()
 			if err != nil {
 				messages <- err.Error()
 			} else {
@@ -346,16 +346,16 @@ func TestMultipleRegistrations(t *testing.T) {
 }
 
 func TestAuthenticateAndRegister(t *testing.T) {
-	_, err := ApiFromAuthenticate()
+	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
 
-	_, err = ApiFromRegister()
+	_, err = Register()
 	assert.NoError(t, err, "no error first time registering")
 
-	_, err = ApiFromAuthenticate()
+	_, err = New()
 	assert.NoError(t, err, "must be able to authenticate after register")
 
-	_, err = ApiFromRegister()
+	_, err = Register()
 	assert.Error(t, err, "must not be able to register twice")
 }
 

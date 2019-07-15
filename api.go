@@ -131,8 +131,9 @@ func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
 	return api, lockSafeConfig, err
 }
 
-// ApiFromAuthenticate will get a API from the configuration file
-func ApiFromAuthenticate() (*CacophonyAPI, error) {
+// New will get an API from the configuration and authenticate. Will return an
+// error if the device has not been registered yet.
+func New() (*CacophonyAPI, error) {
 	api, lockSafeConfig, err := apiFromConfig()
 	if err != nil {
 		return nil, err
@@ -154,7 +155,9 @@ func ApiFromAuthenticate() (*CacophonyAPI, error) {
 	return api, nil
 }
 
-func ApiFromRegister() (*CacophonyAPI, error) {
+// Register will reutrn an API after regsitering. If the device is already
+// registered it will return an error.
+func Register() (*CacophonyAPI, error) {
 	api, lockSafeConfig, err := apiFromConfig()
 	if err != nil {
 		return nil, err
