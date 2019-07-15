@@ -18,6 +18,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -348,6 +349,7 @@ func TestMultipleRegistrations(t *testing.T) {
 func TestAuthenticateAndRegister(t *testing.T) {
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
+	assert.True(t, IsNotRegisteredError(err))
 
 	_, err = Register()
 	assert.NoError(t, err, "no error first time registering")
@@ -357,6 +359,11 @@ func TestAuthenticateAndRegister(t *testing.T) {
 
 	_, err = Register()
 	assert.Error(t, err, "must not be able to register twice")
+}
+
+func TestIsNotRegisteredError(t *testing.T) {
+	assert.True(t, IsNotRegisteredError(&notRegisteredError{}))
+	assert.False(t, IsNotRegisteredError(errors.New("a error")))
 }
 
 // getAPI returns a CacophonyAPI for testing purposes using provided url and password with random name

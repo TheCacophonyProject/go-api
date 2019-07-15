@@ -180,7 +180,7 @@ func Register() (*CacophonyAPI, error) {
 func (api *CacophonyAPI) authenticate() error {
 
 	if api.device.password == "" {
-		return errors.New("no password set")
+		return &notRegisteredError{}
 	}
 
 	data := map[string]interface{}{
@@ -519,4 +519,19 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
+}
+
+type notRegisteredError struct{}
+
+func (e *notRegisteredError) Error() string {
+	return "device is not registered"
+}
+
+func IsNotRegisteredError(e interface{}) bool {
+	switch e.(type) {
+	case *notRegisteredError:
+		return true
+	default:
+		return false
+	}
 }
