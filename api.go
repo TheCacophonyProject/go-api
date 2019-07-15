@@ -48,11 +48,10 @@ type CacophonyDevice struct {
 }
 
 type CacophonyAPI struct {
-	device         *CacophonyDevice
-	httpClient     *http.Client
-	serverURL      string
-	token          string
-	justRegistered bool
+	device     *CacophonyDevice
+	httpClient *http.Client
+	serverURL  string
+	token      string
 }
 
 // joinURL creates an absolute url with supplied baseURL, and all paths
@@ -80,10 +79,6 @@ func (api *CacophonyAPI) getRegURL() string {
 
 func (api *CacophonyAPI) Password() string {
 	return api.device.password
-}
-
-func (api *CacophonyAPI) JustRegistered() bool {
-	return api.justRegistered
 }
 
 // apiFromConfig creates CacophonyAPI from config. The API will need to
@@ -279,7 +274,6 @@ func (api *CacophonyAPI) register() error {
 	api.device.id = respData.ID
 	api.device.password = password
 	api.token = respData.Token
-	api.justRegistered = true
 
 	return nil
 }

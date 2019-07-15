@@ -189,10 +189,8 @@ func TestAPIRegistration(t *testing.T) {
 
 	err = api.register()
 	assert.NoError(t, err)
-	assert.True(t, api.JustRegistered())
 	assert.NotEqual(t, "", api.device.password)
 	assert.NotEqual(t, "", api.token)
-	assert.True(t, api.JustRegistered())
 
 	err = api.authenticate()
 	assert.NoError(t, err)
@@ -384,7 +382,6 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 	if register {
 		api.device.password = randString(20)
 		api.token = "tok-" + randString(20)
-		api.justRegistered = true
 		api.device.id = 1
 	}
 	return api
