@@ -167,7 +167,7 @@ func (lockSafeConfig *LockSafeConfig) Write(deviceID int, password string) error
 	if lockSafeConfig.fileLock.Locked() {
 		err = afero.WriteFile(Fs, lockSafeConfig.filename, buf, 0600)
 	} else {
-		return fmt.Errorf("WritePassword could not get file lock %v", lockSafeConfig.filename)
+		return fmt.Errorf("file is not locked %v", lockSafeConfig.filename)
 	}
 	return err
 }

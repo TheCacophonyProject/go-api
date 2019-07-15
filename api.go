@@ -86,37 +86,30 @@ func (api *CacophonyAPI) JustRegistered() bool {
 	return api.justRegistered
 }
 
-// NewAPI parses device.yaml, and creates a new CacophonyAPI
-// and saves the generated password and ID to device-priv.yaml
-func NewAPI() (*CacophonyAPI, error) {
+// apiFromConfig creates CacophonyAPI from config. The API will need to
+// be registered or be authenticated before used.
+func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
 	conf, err := LoadConfig()
 	if err != nil {
-		return nil, fmt.Errorf("configuration error: %v", err)
+		return nil, nil, fmt.Errorf("configuration error: %v", err)
 	}
-	return apiFromConfig(conf)
-}
-
-// apiFromConfig creates CacophonyAPI from Config and register/authenticates
-// saving the password if necessary
-func apiFromConfig(conf *Config) (*CacophonyAPI, error) {
-
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
-	_, err := lockSafeConfig.Read()
+	_, err = lockSafeConfig.Read()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if lockSafeConfig.config == nil || !lockSafeConfig.config.IsValid() {
 		locked, err := lockSafeConfig.GetExLock()
 		if locked == false || err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		defer lockSafeConfig.Unlock()
 
 		//read again in case was just written to while waiting for exlock
 		_, err = lockSafeConfig.Read()
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -135,36 +128,49 @@ func apiFromConfig(conf *Config) (*CacophonyAPI, error) {
 		httpClient: newHTTPClient(),
 	}
 
-	err = api.registerOrAuthenticate(lockSafeConfig)
-	return api, err
+	return api, lockSafeConfig, err
 }
 
-// createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
-// Token. If no password is given then the device is registered.
-func (api *CacophonyAPI) registerOrAuthenticate(lockSafeConfig *LockSafeConfig) error {
-	if api.device.password == "" {
-		err := api.register()
-		if err != nil {
-			return err
-		}
+// ApiFromAuthenticate will get a API from the configuration file
+func ApiFromAuthenticate() (*CacophonyAPI, error) {
+	api, lockSafeConfig, err := apiFromConfig()
+	if err != nil {
+		return nil, err
+	}
+	if err := api.authenticate(); err != nil {
+		return nil, err
+	}
+	locked, err := lockSafeConfig.GetExLock()
+	if locked == false || err != nil {
+		return nil, err
+	}
+	defer lockSafeConfig.Unlock()
+	if lockSafeConfig.config.DeviceID == 0 && api.device.id > 0 {
 		err = lockSafeConfig.Write(api.device.id, api.Password())
 		if err != nil {
-			return err
-		}
-
-	} else {
-		err := api.authenticate()
-		if err != nil {
-			return err
-		}
-		if lockSafeConfig.config.DeviceID == 0 && api.device.id > 0 {
-			err = lockSafeConfig.Write(api.device.id, api.Password())
-			if err != nil {
-				return err
-			}
+			return nil, err
 		}
 	}
-	return nil
+	return api, nil
+}
+
+func ApiFromRegister() (*CacophonyAPI, error) {
+	api, lockSafeConfig, err := apiFromConfig()
+	if err != nil {
+		return nil, err
+	}
+	if err := api.register(); err != nil {
+		return nil, err
+	}
+	locked, err := lockSafeConfig.GetExLock()
+	if locked == false || err != nil {
+		return nil, err
+	}
+	defer lockSafeConfig.Unlock()
+	if err := lockSafeConfig.Write(api.device.id, api.Password()); err != nil {
+		return nil, err
+	}
+	return api, err
 }
 
 // authenticate a device with Cacophony API and retrieves the token

@@ -306,16 +306,15 @@ func createTestConfig(t *testing.T) string {
 // TestConfigFile test registered config is created with deviceid and password
 func TestConfigFile(t *testing.T) {
 	_ = createTestConfig(t)
-	_, err := NewAPI()
+	_, err := ApiFromRegister()
 	assert.NoError(t, err)
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
 	config, err := lockSafeConfig.Read()
 	require.NoError(t, err, "Must be able to read "+RegisteredConfigPath)
 	assert.NotEmpty(t, config.Password)
 
-	api, err := NewAPI()
+	_, err = ApiFromAuthenticate()
 	assert.NoError(t, err)
-	assert.False(t, api.JustRegistered())
 }
 
 // runMultipleRegistrations registers supplied count APIs with configFile on multiple threads
@@ -325,7 +324,7 @@ func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 
 	for i := 0; i < count; i++ {
 		go func() {
-			api, err := NewAPI()
+			api, err := ApiFromAuthenticate()
 			if err != nil {
 				messages <- err.Error()
 			} else {
@@ -344,6 +343,20 @@ func TestMultipleRegistrations(t *testing.T) {
 		pass := <-passwords
 		assert.Equal(t, password, pass)
 	}
+}
+
+func TestAuthenticateAndRegister(t *testing.T) {
+	_, err := ApiFromAuthenticate()
+	assert.Error(t, err, "error must be thrown if not yet registered")
+
+	_, err = ApiFromRegister()
+	assert.NoError(t, err, "no error first time registering")
+
+	_, err = ApiFromAuthenticate()
+	assert.NoError(t, err, "must be able to authenticate after register")
+
+	_, err = ApiFromRegister()
+	assert.Error(t, err, "must not be able to register twice")
 }
 
 // getAPI returns a CacophonyAPI for testing purposes using provided url and password with random name
