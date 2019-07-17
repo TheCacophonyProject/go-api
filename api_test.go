@@ -349,11 +349,13 @@ func TestAuthenticateAndRegister(t *testing.T) {
 	assert.Error(t, err, "error must be thrown if not yet registered")
 	assert.True(t, IsNotRegisteredError(err))
 
-	_, err = Register()
+	api, err := Register()
 	assert.NoError(t, err, "no error first time registering")
+	deviceID := api.DeviceID()
 
-	_, err = New()
+	api, err = New()
 	assert.NoError(t, err, "must be able to authenticate after register")
+	assert.Equal(t, deviceID, api.DeviceID())
 
 	_, err = Register()
 	assert.Error(t, err, "must not be able to register twice")

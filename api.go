@@ -81,6 +81,10 @@ func (api *CacophonyAPI) Password() string {
 	return api.device.password
 }
 
+func (api *CacophonyAPI) DeviceID() int {
+	return api.device.id
+}
+
 // apiFromConfig creates CacophonyAPI from config. The API will need to
 // be registered or be authenticated before used.
 func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
