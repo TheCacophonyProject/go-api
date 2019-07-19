@@ -54,16 +54,6 @@ var rawThermalData = randString(100)
 var rawFileData = randString(100)
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
-//Tests against httptest
-
-func TestRegistrationHttpRequest(t *testing.T) {
-	ts := GetRegisterServer(t)
-	defer ts.Close()
-	api := getAPI(ts.URL, "", false)
-	err := api.register()
-	assert.NoError(t, err)
-}
-
 func TestNewTokenHttpRequest(t *testing.T) {
 	ts := GetNewAuthenticateServer(t)
 	defer ts.Close()
@@ -180,22 +170,6 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-//Tests against cacophony-api server running at apiURL
-
-func TestAPIRegistration(t *testing.T) {
-	api := getAPI(apiURL, "", false)
-	err := api.authenticate()
-	assert.Error(t, err)
-
-	err = api.register()
-	assert.NoError(t, err)
-	assert.NotEqual(t, "", api.device.password)
-	assert.NotEqual(t, "", api.token)
-
-	err = api.authenticate()
-	assert.NoError(t, err)
-}
-
 func TestAPIAuthenticate(t *testing.T) {
 	api := getAPI(apiURL, defaultPassword, false)
 	api.device.name = defaultDevice
@@ -204,13 +178,16 @@ func TestAPIAuthenticate(t *testing.T) {
 	assert.NotEmpty(t, api.token)
 }
 
-func TestAPIUploadThermalRaw(t *testing.T) {
-	api := getAPI(apiURL, "", false)
-	err := api.register()
+func randomRegister() (*CacophonyAPI, error) {
+	return Register(randString(20), randString(20), defaultGroup, apiURL)
+}
 
+func TestAPIUploadThermalRaw(t *testing.T) {
+	Fs = afero.NewMemMapFs()
+	api, err := randomRegister()
+	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
-	err = api.UploadThermalRaw(reader)
-	assert.NoError(t, err)
+	assert.NoError(t, api.UploadThermalRaw(reader))
 }
 
 func getTestEvent() ([]byte, []time.Time) {
@@ -220,9 +197,9 @@ func getTestEvent() ([]byte, []time.Time) {
 }
 
 func TestAPIReportEvent(t *testing.T) {
-	api := getAPI(apiURL, "", false)
-	err := api.register()
-
+	Fs = afero.NewMemMapFs()
+	api, err := randomRegister()
+	require.NoError(t, err)
 	details, timeStamps := getTestEvent()
 	err = api.ReportEvent(details, timeStamps)
 	assert.NoError(t, err)
@@ -302,20 +279,6 @@ func createTestConfig(t *testing.T) string {
 	return DeviceConfigPath
 }
 
-// TestConfigFile test registered config is created with deviceid and password
-func TestConfigFile(t *testing.T) {
-	_ = createTestConfig(t)
-	_, err := Register()
-	assert.NoError(t, err)
-	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
-	config, err := lockSafeConfig.Read()
-	require.NoError(t, err, "Must be able to read "+RegisteredConfigPath)
-	assert.NotEmpty(t, config.Password)
-
-	_, err = New()
-	assert.NoError(t, err)
-}
-
 // runMultipleRegistrations registers supplied count APIs with configFile on multiple threads
 // and returns a channel in which the registered passwords will be supplied
 func runMultipleRegistrations(configFile string, count int) (int, chan string) {
@@ -345,20 +308,41 @@ func TestMultipleRegistrations(t *testing.T) {
 }
 
 func TestAuthenticateAndRegister(t *testing.T) {
+	Fs = afero.NewMemMapFs()
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
 	assert.True(t, IsNotRegisteredError(err))
 
-	api, err := Register()
-	assert.NoError(t, err, "no error first time registering")
+	name := randString(20)
+	api, err := Register(name, defaultPassword, defaultGroup, apiURL)
+	require.NoError(t, err, "should not error first time registering")
 	deviceID := api.DeviceID()
 
 	api, err = New()
 	assert.NoError(t, err, "must be able to authenticate after register")
 	assert.Equal(t, deviceID, api.DeviceID())
 
-	_, err = Register()
+	api, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
 	assert.Error(t, err, "must not be able to register twice")
+}
+
+func TestRegisterAndNew(t *testing.T) {
+	Fs = afero.NewMemMapFs()
+
+	name := randString(10)
+	password := randString(10)
+	api1, err := Register(name, password, defaultGroup, apiURL)
+	require.NoError(t, err, "failed to register")
+	assert.Equal(t, api1.device.name, name)
+	assert.Equal(t, api1.device.group, defaultGroup)
+	assert.Equal(t, api1.Password(), password)
+
+	api2, err := New()
+	require.NoError(t, err, "failed to login after register")
+	assert.Equal(t, api1.DeviceID(), api2.DeviceID())
+	assert.Equal(t, api2.device.name, name)
+	assert.Equal(t, api2.device.group, defaultGroup)
+	assert.Equal(t, api2.Password(), password)
 }
 
 func TestIsNotRegisteredError(t *testing.T) {
@@ -390,12 +374,13 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 }
 
 func TestFileDownload(t *testing.T) {
+	Fs = afero.NewMemMapFs()
+	api, err := randomRegister()
+	require.NoError(t, err)
+
 	token := getUserToken(t)
 
 	fileID := uploadFile(token, t)
-
-	api := getAPI(apiURL, "", false)
-	assert.NoError(t, api.register())
 
 	filePath := path.Join(os.TempDir(), randString(10))
 	defer os.Remove(filePath)

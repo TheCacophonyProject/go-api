@@ -88,9 +88,9 @@ func (api *CacophonyAPI) DeviceID() int {
 // apiFromConfig creates CacophonyAPI from config. The API will need to
 // be registered or be authenticated before used.
 func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
-	conf, err := LoadConfig()
+	conf, err := GetConfig(DeviceConfigPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("configuration error: %v", err)
+		return nil, nil, err
 	}
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
 	_, err = lockSafeConfig.Read()
@@ -154,25 +154,82 @@ func New() (*CacophonyAPI, error) {
 	return api, nil
 }
 
-// Register will reutrn an API after regsitering. If the device is already
-// registered it will return an error.
-func Register() (*CacophonyAPI, error) {
-	api, lockSafeConfig, err := apiFromConfig()
+// Register will check that there is not already deice config files, will then
+// register with the given parameters and then save them in new config files.
+func Register(devicename string, password string, group string, apiURL string) (*CacophonyAPI, error) {
+	url, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
 	}
-	if err := api.register(); err != nil {
+
+	conf := &Config{
+		DeviceName: devicename,
+		Group:      group,
+		ServerURL:  url.String(),
+		filePath:   DeviceConfigPath,
+	}
+	if exists, err := conf.exists(); exists {
+		return nil, errors.New("device config file exists")
+	} else if err != nil {
 		return nil, err
 	}
-	locked, err := lockSafeConfig.GetExLock()
-	if locked == false || err != nil {
+
+	// Lock safe config files
+	lsConf := NewLockSafeConfig(RegisteredConfigPath)
+	if locked, err := lsConf.GetExLock(); err != nil {
+		return nil, err
+	} else if !locked {
+		return nil, errors.New("could not lock private config file")
+	}
+	defer lsConf.Unlock()
+
+	payload, err := json.Marshal(map[string]string{
+		"group":      group,
+		"devicename": devicename,
+		"password":   password,
+	})
+	if err != nil {
 		return nil, err
 	}
-	defer lockSafeConfig.Unlock()
-	if err := lockSafeConfig.Write(api.device.id, api.Password()); err != nil {
+
+	api := &CacophonyAPI{
+		serverURL:  url.String(),
+		httpClient: newHTTPClient(),
+	}
+	postResp, err := api.httpClient.Post(
+		api.getRegURL(),
+		"application/json",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
 		return nil, err
 	}
-	return api, err
+	defer postResp.Body.Close()
+
+	if err := handleHTTPResponse(postResp); err != nil {
+		return nil, err
+	}
+
+	var respData tokenResponse
+	d := json.NewDecoder(postResp.Body)
+	if err := d.Decode(&respData); err != nil {
+		return nil, fmt.Errorf("decode: %v", err)
+	}
+	api.device = &CacophonyDevice{
+		id:       respData.ID,
+		group:    group,
+		name:     devicename,
+		password: password,
+	}
+	api.token = respData.Token
+	if err := lsConf.Write(api.device.id, api.Password()); err != nil {
+		return nil, err
+	}
+
+	if err := conf.write(); err != nil {
+		return nil, err
+	}
+	return api, nil
 }
 
 // authenticate a device with Cacophony API and retrieves the token
@@ -238,48 +295,6 @@ func newHTTPClient() *http.Client {
 			IdleConnTimeout:       90 * time.Second,
 		},
 	}
-}
-
-// register a device with Cacophony API and retrieves it's token
-func (api *CacophonyAPI) register() error {
-	if api.device.password != "" {
-		return errors.New("already registered")
-	}
-
-	password := randString(20)
-	payload, err := json.Marshal(map[string]string{
-		"group":      api.device.group,
-		"devicename": api.device.name,
-		"password":   password,
-	})
-	if err != nil {
-		return err
-	}
-
-	postResp, err := api.httpClient.Post(
-		api.getRegURL(),
-		"application/json",
-		bytes.NewReader(payload),
-	)
-	if err != nil {
-		return err
-	}
-	defer postResp.Body.Close()
-
-	if err := handleHTTPResponse(postResp); err != nil {
-		return err
-	}
-
-	var respData tokenResponse
-	d := json.NewDecoder(postResp.Body)
-	if err := d.Decode(&respData); err != nil {
-		return fmt.Errorf("decode: %v", err)
-	}
-	api.device.id = respData.ID
-	api.device.password = password
-	api.token = respData.Token
-
-	return nil
 }
 
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
@@ -525,11 +540,7 @@ func (e *notRegisteredError) Error() string {
 	return "device is not registered"
 }
 
-func IsNotRegisteredError(e interface{}) bool {
-	switch e.(type) {
-	case *notRegisteredError:
-		return true
-	default:
-		return false
-	}
+func IsNotRegisteredError(err error) bool {
+	_, ok := err.(*notRegisteredError)
+	return ok
 }

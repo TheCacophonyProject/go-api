@@ -36,6 +36,58 @@ type Config struct {
 	ServerURL  string `yaml:"server-url" json:"serverURL"`
 	Group      string `yaml:"group" json:"groupname"`
 	DeviceName string `yaml:"device-name" json:"devicename"`
+	filePath   string
+}
+
+func GetConfig(filePath string) (*Config, error) {
+	if exists, err := afero.Exists(Fs, filePath); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, &notRegisteredError{}
+	}
+
+	conf := &Config{
+		filePath: filePath,
+	}
+	if err := conf.read(); err != nil {
+		return nil, err
+	}
+	if err := conf.Validate(); err != nil {
+		return nil, err
+	}
+	return conf, nil
+}
+
+func (c *Config) read() error {
+	buf, err := afero.ReadFile(Fs, c.filePath)
+	if err != nil {
+		return err
+	}
+	return yaml.Unmarshal(buf, c)
+}
+
+func (c *Config) write() error {
+	buf, err := yaml.Marshal(c)
+	if err != nil {
+		return err
+	}
+	return afero.WriteFile(Fs, c.filePath, buf, 0644)
+}
+
+func (c *Config) exists() (bool, error) {
+	return afero.Exists(Fs, c.filePath)
+}
+
+//Validate checks supplied Config contains the required data
+func (conf *Config) Validate() error {
+	if conf.ServerURL == "" {
+		return errors.New("server-url missing")
+	}
+
+	if conf.DeviceName == "" {
+		return errors.New("device-name missing")
+	}
+	return nil
 }
 
 type PrivateConfig struct {
@@ -53,40 +105,6 @@ func (conf *PrivateConfig) IsValid() bool {
 		return false
 	}
 	return true
-}
-
-//Validate checks supplied Config contains the required data
-func (conf *Config) Validate() error {
-	if conf.ServerURL == "" {
-		return errors.New("server-url missing")
-	}
-
-	if conf.DeviceName == "" {
-		return errors.New("device-name missing")
-	}
-	return nil
-}
-
-// LoadConfig from deviceConfigPath with a read lock
-func LoadConfig() (*Config, error) {
-	buf, err := afero.ReadFile(Fs, DeviceConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	return ParseConfig(buf)
-}
-
-//ParseConfig takes supplied bytes and returns a parsed Config struct
-func ParseConfig(buf []byte) (*Config, error) {
-	conf := &Config{}
-
-	if err := yaml.Unmarshal(buf, conf); err != nil {
-		return nil, err
-	}
-	if err := conf.Validate(); err != nil {
-		return nil, err
-	}
-	return conf, nil
 }
 
 const (
