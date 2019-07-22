@@ -85,30 +85,30 @@ func (api *CacophonyAPI) DeviceID() int {
 	return api.device.id
 }
 
-// apiFromConfig creates CacophonyAPI from config. The API will need to
-// be registered or be authenticated before used.
-func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
+// apiFromConfig creates a CacophonyAPI from the config files. The API will need
+// to be registered or be authenticated before used.
+func apiFromConfig() (*CacophonyAPI, error) {
 	conf, err := GetConfig(DeviceConfigPath)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
 	_, err = lockSafeConfig.Read()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	if lockSafeConfig.config == nil || !lockSafeConfig.config.IsValid() {
 		locked, err := lockSafeConfig.GetExLock()
 		if locked == false || err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		defer lockSafeConfig.Unlock()
 
 		//read again in case was just written to while waiting for exlock
 		_, err = lockSafeConfig.Read()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
@@ -127,29 +127,18 @@ func apiFromConfig() (*CacophonyAPI, *LockSafeConfig, error) {
 		httpClient: newHTTPClient(),
 	}
 
-	return api, lockSafeConfig, err
+	return api, err
 }
 
-// New will get an API from the configuration and authenticate. Will return an
+// New will get an API from the config files and authenticate. Will return an
 // error if the device has not been registered yet.
 func New() (*CacophonyAPI, error) {
-	api, lockSafeConfig, err := apiFromConfig()
+	api, err := apiFromConfig()
 	if err != nil {
 		return nil, err
 	}
 	if err := api.authenticate(); err != nil {
 		return nil, err
-	}
-	locked, err := lockSafeConfig.GetExLock()
-	if locked == false || err != nil {
-		return nil, err
-	}
-	defer lockSafeConfig.Unlock()
-	if lockSafeConfig.config.DeviceID == 0 && api.device.id > 0 {
-		err = lockSafeConfig.Write(api.device.id, api.Password())
-		if err != nil {
-			return nil, err
-		}
 	}
 	return api, nil
 }

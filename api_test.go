@@ -307,42 +307,30 @@ func TestMultipleRegistrations(t *testing.T) {
 	}
 }
 
-func TestAuthenticateAndRegister(t *testing.T) {
+func TestRegisterAndNew(t *testing.T) {
 	Fs = afero.NewMemMapFs()
+
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
 	assert.True(t, IsNotRegisteredError(err))
-
-	name := randString(20)
-	api, err := Register(name, defaultPassword, defaultGroup, apiURL)
-	require.NoError(t, err, "should not error first time registering")
-	deviceID := api.DeviceID()
-
-	api, err = New()
-	assert.NoError(t, err, "must be able to authenticate after register")
-	assert.Equal(t, deviceID, api.DeviceID())
-
-	api, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
-	assert.Error(t, err, "must not be able to register twice")
-}
-
-func TestRegisterAndNew(t *testing.T) {
-	Fs = afero.NewMemMapFs()
 
 	name := randString(10)
 	password := randString(10)
 	api1, err := Register(name, password, defaultGroup, apiURL)
 	require.NoError(t, err, "failed to register")
-	assert.Equal(t, api1.device.name, name)
-	assert.Equal(t, api1.device.group, defaultGroup)
-	assert.Equal(t, api1.Password(), password)
+	assert.Equal(t, api1.device.name, name, "name does not match what was registered with")
+	assert.Equal(t, api1.device.group, defaultGroup, "group does not match what was registered with")
+	assert.Equal(t, api1.Password(), password, "password does not match what was registered with")
 
 	api2, err := New()
 	require.NoError(t, err, "failed to login after register")
-	assert.Equal(t, api1.DeviceID(), api2.DeviceID())
-	assert.Equal(t, api2.device.name, name)
-	assert.Equal(t, api2.device.group, defaultGroup)
-	assert.Equal(t, api2.Password(), password)
+	assert.Equal(t, api1.DeviceID(), api2.DeviceID(), "deviceID does not match what was registered with")
+	assert.Equal(t, api2.device.name, name, "name does not match what was registered with")
+	assert.Equal(t, api2.device.group, defaultGroup, "group does not match what was registered with")
+	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
+
+	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
+	assert.Error(t, err, "must not be able to register when the device is already registered")
 }
 
 func TestIsNotRegisteredError(t *testing.T) {
