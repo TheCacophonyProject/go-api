@@ -43,7 +43,7 @@ func GetConfig(filePath string) (*Config, error) {
 	if exists, err := afero.Exists(Fs, filePath); err != nil {
 		return nil, err
 	} else if !exists {
-		return nil, &notRegisteredError{}
+		return nil, notRegisteredError
 	}
 
 	conf := &Config{
@@ -97,14 +97,7 @@ type PrivateConfig struct {
 
 //Validate checks supplied Config contains the required data
 func (conf *PrivateConfig) IsValid() bool {
-	if conf.Password == "" {
-		return false
-	}
-
-	if conf.DeviceID == 0 {
-		return false
-	}
-	return true
+	return conf.Password != "" && conf.DeviceID != 0
 }
 
 const (

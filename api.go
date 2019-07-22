@@ -143,7 +143,7 @@ func New() (*CacophonyAPI, error) {
 	return api, nil
 }
 
-// Register will check that there is not already deice config files, will then
+// Register will check that there is not already device config files, will then
 // register with the given parameters and then save them in new config files.
 func Register(devicename string, password string, group string, apiURL string) (*CacophonyAPI, error) {
 	url, err := url.Parse(apiURL)
@@ -225,7 +225,7 @@ func Register(devicename string, password string, group string, apiURL string) (
 func (api *CacophonyAPI) authenticate() error {
 
 	if api.device.password == "" {
-		return &notRegisteredError{}
+		return notRegisteredError
 	}
 
 	data := map[string]interface{}{
@@ -523,13 +523,8 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-type notRegisteredError struct{}
-
-func (e *notRegisteredError) Error() string {
-	return "device is not registered"
-}
+var notRegisteredError = errors.New("device is not registered")
 
 func IsNotRegisteredError(err error) bool {
-	_, ok := err.(*notRegisteredError)
-	return ok
+	return err == notRegisteredError
 }

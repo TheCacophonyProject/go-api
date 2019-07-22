@@ -329,12 +329,15 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api2.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
 
+	reader := strings.NewReader(rawThermalData)
+	assert.NoError(t, api2.UploadThermalRaw(reader), "check that api can upload recordings")
+
 	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
 	assert.Error(t, err, "must not be able to register when the device is already registered")
 }
 
 func TestIsNotRegisteredError(t *testing.T) {
-	assert.True(t, IsNotRegisteredError(&notRegisteredError{}))
+	assert.True(t, IsNotRegisteredError(notRegisteredError))
 	assert.False(t, IsNotRegisteredError(errors.New("a error")))
 }
 
