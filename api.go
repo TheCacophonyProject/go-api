@@ -48,11 +48,10 @@ type CacophonyDevice struct {
 }
 
 type CacophonyAPI struct {
-	device         *CacophonyDevice
-	httpClient     *http.Client
-	serverURL      string
-	token          string
-	justRegistered bool
+	device     *CacophonyDevice
+	httpClient *http.Client
+	serverURL  string
+	token      string
 }
 
 // joinURL creates an absolute url with supplied baseURL, and all paths
@@ -82,26 +81,19 @@ func (api *CacophonyAPI) Password() string {
 	return api.device.password
 }
 
-func (api *CacophonyAPI) JustRegistered() bool {
-	return api.justRegistered
+func (api *CacophonyAPI) DeviceID() int {
+	return api.device.id
 }
 
-// NewAPI parses device.yaml, and creates a new CacophonyAPI
-// and saves the generated password and ID to device-priv.yaml
-func NewAPI() (*CacophonyAPI, error) {
-	conf, err := LoadConfig()
+// apiFromConfig creates a CacophonyAPI from the config files. The API will need
+// to be registered or be authenticated before used.
+func apiFromConfig() (*CacophonyAPI, error) {
+	conf, err := GetConfig(DeviceConfigPath)
 	if err != nil {
-		return nil, fmt.Errorf("configuration error: %v", err)
+		return nil, err
 	}
-	return apiFromConfig(conf)
-}
-
-// apiFromConfig creates CacophonyAPI from Config and register/authenticates
-// saving the password if necessary
-func apiFromConfig(conf *Config) (*CacophonyAPI, error) {
-
 	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
-	_, err := lockSafeConfig.Read()
+	_, err = lockSafeConfig.Read()
 	if err != nil {
 		return nil, err
 	}
@@ -135,43 +127,105 @@ func apiFromConfig(conf *Config) (*CacophonyAPI, error) {
 		httpClient: newHTTPClient(),
 	}
 
-	err = api.registerOrAuthenticate(lockSafeConfig)
 	return api, err
 }
 
-// createAPI creates a CacophonyAPI instance and obtains a fresh JSON Web
-// Token. If no password is given then the device is registered.
-func (api *CacophonyAPI) registerOrAuthenticate(lockSafeConfig *LockSafeConfig) error {
-	if api.device.password == "" {
-		err := api.register()
-		if err != nil {
-			return err
-		}
-		err = lockSafeConfig.Write(api.device.id, api.Password())
-		if err != nil {
-			return err
-		}
-
-	} else {
-		err := api.authenticate()
-		if err != nil {
-			return err
-		}
-		if lockSafeConfig.config.DeviceID == 0 && api.device.id > 0 {
-			err = lockSafeConfig.Write(api.device.id, api.Password())
-			if err != nil {
-				return err
-			}
-		}
+// New will get an API from the config files and authenticate. Will return an
+// error if the device has not been registered yet.
+func New() (*CacophonyAPI, error) {
+	api, err := apiFromConfig()
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if err := api.authenticate(); err != nil {
+		return nil, err
+	}
+	return api, nil
+}
+
+// Register will check that there is not already device config files, will then
+// register with the given parameters and then save them in new config files.
+func Register(devicename string, password string, group string, apiURL string) (*CacophonyAPI, error) {
+	url, err := url.Parse(apiURL)
+	if err != nil {
+		return nil, err
+	}
+
+	conf := &Config{
+		DeviceName: devicename,
+		Group:      group,
+		ServerURL:  url.String(),
+		filePath:   DeviceConfigPath,
+	}
+	if exists, err := conf.exists(); exists {
+		return nil, errors.New("device config file exists")
+	} else if err != nil {
+		return nil, err
+	}
+
+	// Lock safe config files
+	lsConf := NewLockSafeConfig(RegisteredConfigPath)
+	if locked, err := lsConf.GetExLock(); err != nil {
+		return nil, err
+	} else if !locked {
+		return nil, errors.New("could not lock private config file")
+	}
+	defer lsConf.Unlock()
+
+	payload, err := json.Marshal(map[string]string{
+		"group":      group,
+		"devicename": devicename,
+		"password":   password,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	api := &CacophonyAPI{
+		serverURL:  url.String(),
+		httpClient: newHTTPClient(),
+	}
+	postResp, err := api.httpClient.Post(
+		api.getRegURL(),
+		"application/json",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer postResp.Body.Close()
+
+	if err := handleHTTPResponse(postResp); err != nil {
+		return nil, err
+	}
+
+	var respData tokenResponse
+	d := json.NewDecoder(postResp.Body)
+	if err := d.Decode(&respData); err != nil {
+		return nil, fmt.Errorf("decode: %v", err)
+	}
+	api.device = &CacophonyDevice{
+		id:       respData.ID,
+		group:    group,
+		name:     devicename,
+		password: password,
+	}
+	api.token = respData.Token
+	if err := lsConf.Write(api.device.id, api.Password()); err != nil {
+		return nil, err
+	}
+
+	if err := conf.write(); err != nil {
+		return nil, err
+	}
+	return api, nil
 }
 
 // authenticate a device with Cacophony API and retrieves the token
 func (api *CacophonyAPI) authenticate() error {
 
 	if api.device.password == "" {
-		return errors.New("no password set")
+		return notRegisteredError
 	}
 
 	data := map[string]interface{}{
@@ -230,49 +284,6 @@ func newHTTPClient() *http.Client {
 			IdleConnTimeout:       90 * time.Second,
 		},
 	}
-}
-
-// register a device with Cacophony API and retrieves it's token
-func (api *CacophonyAPI) register() error {
-	if api.device.password != "" {
-		return errors.New("already registered")
-	}
-
-	password := randString(20)
-	payload, err := json.Marshal(map[string]string{
-		"group":      api.device.group,
-		"devicename": api.device.name,
-		"password":   password,
-	})
-	if err != nil {
-		return err
-	}
-
-	postResp, err := api.httpClient.Post(
-		api.getRegURL(),
-		"application/json",
-		bytes.NewReader(payload),
-	)
-	if err != nil {
-		return err
-	}
-	defer postResp.Body.Close()
-
-	if err := handleHTTPResponse(postResp); err != nil {
-		return err
-	}
-
-	var respData tokenResponse
-	d := json.NewDecoder(postResp.Body)
-	if err := d.Decode(&respData); err != nil {
-		return fmt.Errorf("decode: %v", err)
-	}
-	api.device.id = respData.ID
-	api.device.password = password
-	api.token = respData.Token
-	api.justRegistered = true
-
-	return nil
 }
 
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
@@ -510,4 +521,10 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
+}
+
+var notRegisteredError = errors.New("device is not registered")
+
+func IsNotRegisteredError(err error) bool {
+	return err == notRegisteredError
 }

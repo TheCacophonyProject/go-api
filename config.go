@@ -36,23 +36,46 @@ type Config struct {
 	ServerURL  string `yaml:"server-url" json:"serverURL"`
 	Group      string `yaml:"group" json:"groupname"`
 	DeviceName string `yaml:"device-name" json:"devicename"`
+	filePath   string
 }
 
-type PrivateConfig struct {
-	Password string `yaml:"password"`
-	DeviceID int    `yaml:"device-id" json:"deviceID"`
+func GetConfig(filePath string) (*Config, error) {
+	if exists, err := afero.Exists(Fs, filePath); err != nil {
+		return nil, err
+	} else if !exists {
+		return nil, notRegisteredError
+	}
+
+	conf := &Config{
+		filePath: filePath,
+	}
+	if err := conf.read(); err != nil {
+		return nil, err
+	}
+	if err := conf.Validate(); err != nil {
+		return nil, err
+	}
+	return conf, nil
 }
 
-//Validate checks supplied Config contains the required data
-func (conf *PrivateConfig) IsValid() bool {
-	if conf.Password == "" {
-		return false
+func (c *Config) read() error {
+	buf, err := afero.ReadFile(Fs, c.filePath)
+	if err != nil {
+		return err
 	}
+	return yaml.Unmarshal(buf, c)
+}
 
-	if conf.DeviceID == 0 {
-		return false
+func (c *Config) write() error {
+	buf, err := yaml.Marshal(c)
+	if err != nil {
+		return err
 	}
-	return true
+	return afero.WriteFile(Fs, c.filePath, buf, 0644)
+}
+
+func (c *Config) exists() (bool, error) {
+	return afero.Exists(Fs, c.filePath)
 }
 
 //Validate checks supplied Config contains the required data
@@ -67,26 +90,14 @@ func (conf *Config) Validate() error {
 	return nil
 }
 
-// LoadConfig from deviceConfigPath with a read lock
-func LoadConfig() (*Config, error) {
-	buf, err := afero.ReadFile(Fs, DeviceConfigPath)
-	if err != nil {
-		return nil, err
-	}
-	return ParseConfig(buf)
+type PrivateConfig struct {
+	Password string `yaml:"password"`
+	DeviceID int    `yaml:"device-id" json:"deviceID"`
 }
 
-//ParseConfig takes supplied bytes and returns a parsed Config struct
-func ParseConfig(buf []byte) (*Config, error) {
-	conf := &Config{}
-
-	if err := yaml.Unmarshal(buf, conf); err != nil {
-		return nil, err
-	}
-	if err := conf.Validate(); err != nil {
-		return nil, err
-	}
-	return conf, nil
+//Validate checks supplied Config contains the required data
+func (conf *PrivateConfig) IsValid() bool {
+	return conf.Password != "" && conf.DeviceID != 0
 }
 
 const (
@@ -167,7 +178,7 @@ func (lockSafeConfig *LockSafeConfig) Write(deviceID int, password string) error
 	if lockSafeConfig.fileLock.Locked() {
 		err = afero.WriteFile(Fs, lockSafeConfig.filename, buf, 0600)
 	} else {
-		return fmt.Errorf("WritePassword could not get file lock %v", lockSafeConfig.filename)
+		return fmt.Errorf("file is not locked %v", lockSafeConfig.filename)
 	}
 	return err
 }
