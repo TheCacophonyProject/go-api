@@ -523,6 +523,42 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+// Rename can change the device name and group
+func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
+
+	data := map[string]string{
+		"newName":  newName,
+		"newGroup": newGroup,
+	}
+	jsonAll, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	url := joinURL(api.serverURL, apiBasePath, "devices/rename")
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if err := handleHTTPResponse(resp); err != nil {
+		return err
+	}
+
+	api.device.group = newGroup
+	api.device.name = newName
+
+	return updateConfNameAndGroup(newName, newGroup, DeviceConfigPath)
+}
+
 var notRegisteredError = errors.New("device is not registered")
 
 func IsNotRegisteredError(err error) bool {

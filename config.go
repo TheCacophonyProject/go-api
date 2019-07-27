@@ -78,6 +78,17 @@ func (c *Config) exists() (bool, error) {
 	return afero.Exists(Fs, c.filePath)
 }
 
+func updateConfNameAndGroup(newdevice string, newgroup string, filePath string) error {
+	conf, err := GetConfig(filePath)
+	if err != nil {
+		return err
+	}
+	conf.DeviceName = newdevice
+	conf.Group = newgroup
+	Fs.Remove(filePath)
+	return conf.write()
+}
+
 //Validate checks supplied Config contains the required data
 func (conf *Config) Validate() error {
 	if conf.ServerURL == "" {

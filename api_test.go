@@ -44,6 +44,7 @@ const (
 	defaultDevice       = "test-device"
 	defaultPassword     = "test-password"
 	defaultGroup        = "test-group"
+	defaultGroup2       = "test-group-2"
 	defaultUsername     = "go-api-user-test"
 	defaultuserPassword = "test-user-password"
 	filesURL            = "/files"
@@ -383,6 +384,40 @@ func TestFileDownload(t *testing.T) {
 	fileData, err := ioutil.ReadFile(filePath)
 	assert.NoError(t, err)
 	assert.Equal(t, rawFileData, string(fileData))
+}
+
+func TestDeviceRename(t *testing.T) {
+	Fs = afero.NewMemMapFs()
+	api, err := randomRegister()
+	require.NoError(t, err)
+
+	originalName := api.device.name
+	originalGroup := api.device.group
+	newName := randString(10)
+	notAGroupName := randString(10)
+
+	// fail to rename
+	require.Error(t, api.Rename(newName, notAGroupName),
+		"shouldn't be able to change to a group that doesn't exist")
+	assert.Equal(t, api.device.name, originalName,
+		"name shouldn't have changed if rename failed")
+	assert.Equal(t, api.device.group, originalGroup,
+		"name shouldn't have changed if rename failed")
+
+	// rename
+	require.NoError(t, api.Rename(newName, defaultGroup2))
+	assert.Equal(t, api.device.name, newName,
+		"name should have changed to the new name")
+	assert.Equal(t, api.device.group, defaultGroup2,
+		"group should have changed to the new group")
+
+	// login again and check device and group name
+	api2, err := New()
+	require.NoError(t, err)
+	assert.Equal(t, api2.device.name, newName,
+		"name should have changed to the new name")
+	assert.Equal(t, api2.device.group, defaultGroup2,
+		"group should have changed to the new group")
 }
 
 func uploadFile(userToken string, t *testing.T) int {
