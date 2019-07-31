@@ -322,6 +322,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api1.device.name, name, "name does not match what was registered with")
 	assert.Equal(t, api1.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api1.Password(), password, "password does not match what was registered with")
+	assert.Equal(t, api1.getHostname(), getHostnameFromFile(t))
 
 	api2, err := New()
 	require.NoError(t, err, "failed to login after register")
@@ -390,6 +391,7 @@ func TestDeviceRename(t *testing.T) {
 	Fs = afero.NewMemMapFs()
 	api, err := randomRegister()
 	require.NoError(t, err)
+	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 
 	originalName := api.device.name
 	originalGroup := api.device.group
@@ -403,6 +405,7 @@ func TestDeviceRename(t *testing.T) {
 		"name shouldn't have changed if rename failed")
 	assert.Equal(t, api.device.group, originalGroup,
 		"name shouldn't have changed if rename failed")
+	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 
 	// rename
 	require.NoError(t, api.Rename(newName, defaultGroup2))
@@ -410,6 +413,7 @@ func TestDeviceRename(t *testing.T) {
 		"name should have changed to the new name")
 	assert.Equal(t, api.device.group, defaultGroup2,
 		"group should have changed to the new group")
+	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 
 	// login again and check device and group name
 	api2, err := New()
@@ -418,6 +422,12 @@ func TestDeviceRename(t *testing.T) {
 		"name should have changed to the new name")
 	assert.Equal(t, api2.device.group, defaultGroup2,
 		"group should have changed to the new group")
+	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
+}
+
+func TestStringProcessing(t *testing.T) {
+	assert.Equal(t, "testname", procName("TeSt!@#$%^&*()`~_name"))
+	assert.Equal(t, "testname", procName("-!TeSt!@#$%^&*()`~_name-_"))
 }
 
 func uploadFile(userToken string, t *testing.T) int {
@@ -477,4 +487,10 @@ func getUserToken(t *testing.T) string {
 	d := json.NewDecoder(postResp.Body)
 	assert.NoError(t, d.Decode(&resp))
 	return resp.Token
+}
+
+func getHostnameFromFile(t *testing.T) string {
+	b, err := afero.ReadFile(Fs, hostnameFile)
+	require.NoError(t, err)
+	return string(b)
 }

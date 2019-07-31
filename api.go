@@ -28,7 +28,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -216,6 +218,9 @@ func Register(devicename string, password string, group string, apiURL string) (
 	}
 
 	if err := conf.write(); err != nil {
+		return nil, err
+	}
+	if err := writeToHostnameFile(api.getHostname()); err != nil {
 		return nil, err
 	}
 	return api, nil
@@ -556,7 +561,21 @@ func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
 	api.device.group = newGroup
 	api.device.name = newName
 
-	return updateConfNameAndGroup(newName, newGroup, DeviceConfigPath)
+	if err := updateConfNameAndGroup(newName, newGroup, DeviceConfigPath); err != nil {
+		return err
+	}
+
+	return writeToHostnameFile(api.getHostname())
+}
+
+func (api *CacophonyAPI) getHostname() string {
+	return procName(api.device.name) + "-" + procName(api.device.group)
+}
+
+func procName(name string) string {
+	name = strings.ToLower(name)
+	reg, _ := regexp.Compile("[^a-z0-9]+")
+	return reg.ReplaceAllString(name, "")
 }
 
 var notRegisteredError = errors.New("device is not registered")

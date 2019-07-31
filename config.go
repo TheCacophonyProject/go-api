@@ -30,6 +30,7 @@ import (
 const (
 	DeviceConfigPath     = "/etc/cacophony/device.yaml"
 	RegisteredConfigPath = "/etc/cacophony/device-priv.yaml"
+	hostnameFile         = "/etc/hostname"
 )
 
 type Config struct {
@@ -87,6 +88,11 @@ func updateConfNameAndGroup(newdevice string, newgroup string, filePath string) 
 	conf.Group = newgroup
 	Fs.Remove(filePath)
 	return conf.write()
+}
+
+func writeToHostnameFile(hostname string) error {
+	Fs.Remove(hostnameFile)
+	return afero.WriteFile(Fs, hostnameFile, []byte(hostname), 0644)
 }
 
 //Validate checks supplied Config contains the required data
