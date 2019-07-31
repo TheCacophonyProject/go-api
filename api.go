@@ -87,6 +87,14 @@ func (api *CacophonyAPI) DeviceID() int {
 	return api.device.id
 }
 
+func (api *CacophonyAPI) DeviceName() string {
+	return api.device.name
+}
+
+func (api *CacophonyAPI) GroupName() string {
+	return api.device.group
+}
+
 // apiFromConfig creates a CacophonyAPI from the config files. The API will need
 // to be registered or be authenticated before used.
 func apiFromConfig() (*CacophonyAPI, error) {
