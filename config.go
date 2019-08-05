@@ -86,12 +86,10 @@ func updateConfNameAndGroup(newdevice string, newgroup string, filePath string) 
 	}
 	conf.DeviceName = newdevice
 	conf.Group = newgroup
-	Fs.Remove(filePath)
 	return conf.write()
 }
 
 func writeToHostnameFile(hostname string) error {
-	Fs.Remove(hostnameFile)
 	return afero.WriteFile(Fs, hostnameFile, []byte(hostname), 0644)
 }
 

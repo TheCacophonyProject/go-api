@@ -426,8 +426,8 @@ func TestDeviceRename(t *testing.T) {
 }
 
 func TestStringProcessing(t *testing.T) {
-	assert.Equal(t, "testname", procName("TeSt!@#$%^&*()`~_name"))
-	assert.Equal(t, "testname", procName("-!TeSt!@#$%^&*()`~_name-_"))
+	assert.Equal(t, "testname", safeName("TeSt!@#$%^&*()`~_name"))
+	assert.Equal(t, "testname", safeName("-!TeSt!@#$%^&*()`~_name-_"))
 }
 
 func uploadFile(userToken string, t *testing.T) int {

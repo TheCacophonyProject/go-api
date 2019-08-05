@@ -577,12 +577,12 @@ func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
 }
 
 func (api *CacophonyAPI) getHostname() string {
-	return procName(api.device.name) + "-" + procName(api.device.group)
+	return safeName(api.device.name) + "-" + safeName(api.device.group)
 }
 
-func procName(name string) string {
+func safeName(name string) string {
 	name = strings.ToLower(name)
-	reg, _ := regexp.Compile("[^a-z0-9]+")
+	reg := regexp.MustCompile("[^a-z0-9]+")
 	return reg.ReplaceAllString(name, "")
 }
 
