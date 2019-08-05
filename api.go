@@ -228,7 +228,7 @@ func Register(devicename string, password string, group string, apiURL string) (
 	if err := conf.write(); err != nil {
 		return nil, err
 	}
-	if err := writeToHostnameFile(api.getHostname()); err != nil {
+	if err := updateHostnameFiles(api.getHostname()); err != nil {
 		return nil, err
 	}
 	return api, nil
@@ -573,7 +573,7 @@ func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
 		return err
 	}
 
-	return writeToHostnameFile(api.getHostname())
+	return updateHostnameFiles(api.getHostname())
 }
 
 func (api *CacophonyAPI) getHostname() string {

@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -48,6 +49,8 @@ const (
 	defaultUsername     = "go-api-user-test"
 	defaultuserPassword = "test-user-password"
 	filesURL            = "/files"
+	hostsFileString     = `127.0.0.1 raspberrypi
+::1 localhost`
 )
 
 var responseHeader = http.StatusOK
@@ -184,7 +187,7 @@ func randomRegister() (*CacophonyAPI, error) {
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
-	Fs = afero.NewMemMapFs()
+	require.NoError(t, newFs())
 	api, err := randomRegister()
 	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
@@ -198,7 +201,7 @@ func getTestEvent() ([]byte, []time.Time) {
 }
 
 func TestAPIReportEvent(t *testing.T) {
-	Fs = afero.NewMemMapFs()
+	require.NoError(t, newFs())
 	api, err := randomRegister()
 	require.NoError(t, err)
 	details, timeStamps := getTestEvent()
@@ -309,7 +312,7 @@ func TestMultipleRegistrations(t *testing.T) {
 }
 
 func TestRegisterAndNew(t *testing.T) {
-	Fs = afero.NewMemMapFs()
+	require.NoError(t, newFs())
 
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
@@ -323,6 +326,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api1.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api1.Password(), password, "password does not match what was registered with")
 	assert.Equal(t, api1.getHostname(), getHostnameFromFile(t))
+	assert.NoError(t, checkHostsFile(api1))
 
 	api2, err := New()
 	require.NoError(t, err, "failed to login after register")
@@ -330,9 +334,11 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api2.device.name, name, "name does not match what was registered with")
 	assert.Equal(t, api2.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
+	assert.NoError(t, checkHostsFile(api2))
 
 	reader := strings.NewReader(rawThermalData)
 	assert.NoError(t, api2.UploadThermalRaw(reader), "check that api can upload recordings")
+	assert.NoError(t, checkHostsFile(api2))
 
 	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
 	assert.Error(t, err, "must not be able to register when the device is already registered")
@@ -367,7 +373,7 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 }
 
 func TestFileDownload(t *testing.T) {
-	Fs = afero.NewMemMapFs()
+	require.NoError(t, newFs())
 	api, err := randomRegister()
 	require.NoError(t, err)
 
@@ -388,10 +394,11 @@ func TestFileDownload(t *testing.T) {
 }
 
 func TestDeviceRename(t *testing.T) {
-	Fs = afero.NewMemMapFs()
+	require.NoError(t, newFs())
 	api, err := randomRegister()
 	require.NoError(t, err)
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.NoError(t, checkHostsFile(api))
 
 	originalName := api.device.name
 	originalGroup := api.device.group
@@ -406,6 +413,7 @@ func TestDeviceRename(t *testing.T) {
 	assert.Equal(t, api.device.group, originalGroup,
 		"name shouldn't have changed if rename failed")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.NoError(t, checkHostsFile(api))
 
 	// rename
 	require.NoError(t, api.Rename(newName, defaultGroup2))
@@ -414,6 +422,7 @@ func TestDeviceRename(t *testing.T) {
 	assert.Equal(t, api.device.group, defaultGroup2,
 		"group should have changed to the new group")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.NoError(t, checkHostsFile(api))
 
 	// login again and check device and group name
 	api2, err := New()
@@ -423,6 +432,7 @@ func TestDeviceRename(t *testing.T) {
 	assert.Equal(t, api2.device.group, defaultGroup2,
 		"group should have changed to the new group")
 	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
+	assert.NoError(t, checkHostsFile(api2))
 }
 
 func TestStringProcessing(t *testing.T) {
@@ -493,4 +503,22 @@ func getHostnameFromFile(t *testing.T) string {
 	b, err := afero.ReadFile(Fs, hostnameFile)
 	require.NoError(t, err)
 	return string(b)
+}
+
+func checkHostsFile(api *CacophonyAPI) error {
+	input, err := afero.ReadFile(Fs, hostsFile)
+	if err != nil {
+		return err
+	}
+	hostsString := string(input)
+	substr := fmt.Sprintf(hostsFileFormat, api.getHostname()) + "\n"
+	if strings.Contains(hostsString, substr) {
+		return nil
+	}
+	return fmt.Errorf("hosts file not formatted correctly. Could not find '%s'", substr)
+}
+
+func newFs() error {
+	Fs = afero.NewMemMapFs()
+	return afero.WriteFile(Fs, hostsFile, []byte(hostsFileString), 0644)
 }
