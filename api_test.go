@@ -438,7 +438,7 @@ func TestDeviceRename(t *testing.T) {
 func TestLoadConfig(t *testing.T) {
 	newFs(t)
 	_, err := LoadConfig()
-	require.Error(t, err)
+	require.True(t, IsNotRegisteredError(err))
 	api, err := randomRegister()
 	require.NoError(t, err)
 	config, err := LoadConfig()
