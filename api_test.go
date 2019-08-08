@@ -435,6 +435,19 @@ func TestDeviceRename(t *testing.T) {
 	assert.NoError(t, checkHostsFile(api2))
 }
 
+func TestLoadConfig(t *testing.T) {
+	newFs(t)
+	_, err := LoadConfig()
+	require.Error(t, err)
+	api, err := randomRegister()
+	require.NoError(t, err)
+	config, err := LoadConfig()
+	require.NoError(t, err)
+	require.Equal(t, api.DeviceName(), config.DeviceName)
+	require.Equal(t, api.GroupName(), config.Group)
+	require.Equal(t, api.serverURL, config.ServerURL)
+}
+
 func TestStringProcessing(t *testing.T) {
 	assert.Equal(t, "testname", safeName("TeSt!@#$%^&*()`~_name"))
 	assert.Equal(t, "testname", safeName("-!TeSt!@#$%^&*()`~_name-_"))
