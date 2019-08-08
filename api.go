@@ -28,7 +28,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -83,6 +85,14 @@ func (api *CacophonyAPI) Password() string {
 
 func (api *CacophonyAPI) DeviceID() int {
 	return api.device.id
+}
+
+func (api *CacophonyAPI) DeviceName() string {
+	return api.device.name
+}
+
+func (api *CacophonyAPI) GroupName() string {
+	return api.device.group
 }
 
 // apiFromConfig creates a CacophonyAPI from the config files. The API will need
@@ -216,6 +226,9 @@ func Register(devicename string, password string, group string, apiURL string) (
 	}
 
 	if err := conf.write(); err != nil {
+		return nil, err
+	}
+	if err := updateHostnameFiles(api.getHostname()); err != nil {
 		return nil, err
 	}
 	return api, nil
@@ -521,6 +534,56 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
+}
+
+// Rename can change the device name and group
+func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
+
+	data := map[string]string{
+		"newName":  newName,
+		"newGroup": newGroup,
+	}
+	jsonAll, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	url := joinURL(api.serverURL, apiBasePath, "devices/rename")
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if err := handleHTTPResponse(resp); err != nil {
+		return err
+	}
+
+	api.device.group = newGroup
+	api.device.name = newName
+
+	if err := updateConfNameAndGroup(newName, newGroup, DeviceConfigPath); err != nil {
+		return err
+	}
+
+	return updateHostnameFiles(api.getHostname())
+}
+
+func (api *CacophonyAPI) getHostname() string {
+	return safeName(api.device.name) + "-" + safeName(api.device.group)
+}
+
+func safeName(name string) string {
+	name = strings.ToLower(name)
+	reg := regexp.MustCompile("[^a-z0-9]+")
+	return reg.ReplaceAllString(name, "")
 }
 
 var notRegisteredError = errors.New("device is not registered")

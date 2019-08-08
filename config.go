@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofrs/flock"
@@ -30,6 +31,9 @@ import (
 const (
 	DeviceConfigPath     = "/etc/cacophony/device.yaml"
 	RegisteredConfigPath = "/etc/cacophony/device-priv.yaml"
+	hostnameFile         = "/etc/hostname"
+	hostsFile            = "/etc/hosts"
+	hostsFileFormat      = "127.0.0.1\t%s"
 )
 
 type Config struct {
@@ -37,6 +41,11 @@ type Config struct {
 	Group      string `yaml:"group" json:"groupname"`
 	DeviceName string `yaml:"device-name" json:"devicename"`
 	filePath   string
+}
+
+// LoadConfig will get the config from the default device config path
+func LoadConfig() (*Config, error) {
+	return GetConfig(DeviceConfigPath)
 }
 
 func GetConfig(filePath string) (*Config, error) {
@@ -76,6 +85,38 @@ func (c *Config) write() error {
 
 func (c *Config) exists() (bool, error) {
 	return afero.Exists(Fs, c.filePath)
+}
+
+func updateConfNameAndGroup(newdevice string, newgroup string, filePath string) error {
+	conf, err := GetConfig(filePath)
+	if err != nil {
+		return err
+	}
+	conf.DeviceName = newdevice
+	conf.Group = newgroup
+	return conf.write()
+}
+
+func updateHostnameFiles(hostname string) error {
+	if err := afero.WriteFile(Fs, hostnameFile, []byte(hostname), 0644); err != nil {
+		return err
+	}
+
+	input, err := afero.ReadFile(Fs, hostsFile)
+	if err != nil {
+		return err
+	}
+
+	lines := strings.Split(string(input), "\n")
+
+	for i, line := range lines {
+		if strings.Fields(line)[0] == "127.0.0.1" {
+			lines[i] = fmt.Sprintf(hostsFileFormat, hostname)
+		}
+	}
+	output := strings.Join(lines, "\n")
+	return afero.WriteFile(Fs, hostsFile, []byte(output), 0644)
+
 }
 
 //Validate checks supplied Config contains the required data
