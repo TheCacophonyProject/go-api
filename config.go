@@ -43,6 +43,11 @@ type Config struct {
 	filePath   string
 }
 
+// LoadConfig will get the config from the default device config path
+func LoadConfig() (*Config, error) {
+	return GetConfig(DeviceConfigPath)
+}
+
 func GetConfig(filePath string) (*Config, error) {
 	if exists, err := afero.Exists(Fs, filePath); err != nil {
 		return nil, err
@@ -105,7 +110,7 @@ func updateHostnameFiles(hostname string) error {
 	lines := strings.Split(string(input), "\n")
 
 	for i, line := range lines {
-		if strings.HasPrefix(line, "127.0.0.1") {
+		if strings.Fields(line)[0] == "127.0.0.1" {
 			lines[i] = fmt.Sprintf(hostsFileFormat, hostname)
 		}
 	}

@@ -187,7 +187,7 @@ func randomRegister() (*CacophonyAPI, error) {
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
-	require.NoError(t, newFs())
+	newFs(t)
 	api, err := randomRegister()
 	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
@@ -201,7 +201,7 @@ func getTestEvent() ([]byte, []time.Time) {
 }
 
 func TestAPIReportEvent(t *testing.T) {
-	require.NoError(t, newFs())
+	newFs(t)
 	api, err := randomRegister()
 	require.NoError(t, err)
 	details, timeStamps := getTestEvent()
@@ -312,7 +312,7 @@ func TestMultipleRegistrations(t *testing.T) {
 }
 
 func TestRegisterAndNew(t *testing.T) {
-	require.NoError(t, newFs())
+	newFs(t)
 
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
@@ -373,7 +373,7 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 }
 
 func TestFileDownload(t *testing.T) {
-	require.NoError(t, newFs())
+	newFs(t)
 	api, err := randomRegister()
 	require.NoError(t, err)
 
@@ -394,7 +394,7 @@ func TestFileDownload(t *testing.T) {
 }
 
 func TestDeviceRename(t *testing.T) {
-	require.NoError(t, newFs())
+	newFs(t)
 	api, err := randomRegister()
 	require.NoError(t, err)
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
@@ -518,7 +518,7 @@ func checkHostsFile(api *CacophonyAPI) error {
 	return fmt.Errorf("hosts file not formatted correctly. Could not find '%s'", substr)
 }
 
-func newFs() error {
+func newFs(t *testing.T) {
 	Fs = afero.NewMemMapFs()
-	return afero.WriteFile(Fs, hostsFile, []byte(hostsFileString), 0644)
+	require.NoError(t, afero.WriteFile(Fs, hostsFile, []byte(hostsFileString), 0644))
 }
