@@ -110,7 +110,8 @@ func updateHostnameFiles(hostname string) error {
 	lines := strings.Split(string(input), "\n")
 
 	for i, line := range lines {
-		if strings.Fields(line)[0] == "127.0.0.1" {
+		fields := strings.Fields(line)
+		if len(fields) >= 1 && fields[0] == "127.0.0.1" {
 			lines[i] = fmt.Sprintf(hostsFileFormat, hostname)
 		}
 	}

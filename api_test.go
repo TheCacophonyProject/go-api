@@ -50,7 +50,8 @@ const (
 	defaultuserPassword = "test-user-password"
 	filesURL            = "/files"
 	hostsFileString     = `127.0.0.1 raspberrypi
-::1 localhost`
+::1 localhost
+`
 )
 
 var responseHeader = http.StatusOK
