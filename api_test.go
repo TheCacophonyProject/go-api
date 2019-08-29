@@ -406,6 +406,7 @@ func TestDeviceReregister(t *testing.T) {
 	originalGroup := api.device.group
 	origionalToken := api.token
 	origionalPassword := api.Password()
+	origionalServerURL := api.serverURL
 	newName := randString(10)
 	notAGroupName := randString(10)
 	newPassword := randString(10)
@@ -421,6 +422,8 @@ func TestDeviceReregister(t *testing.T) {
 		"JWT shouldn't have changed if rename failed")
 	assert.Equal(t, api.Password(), origionalPassword,
 		"password shouldn't have changed if rename failed")
+	assert.Equal(t, api.serverURL, origionalServerURL,
+		"serverURL shouldn't have changed if rename failed")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 
@@ -434,6 +437,8 @@ func TestDeviceReregister(t *testing.T) {
 		"JWT should have changed")
 	assert.Equal(t, api.Password(), newPassword,
 		"password should have changed to the new password")
+	assert.Equal(t, api.serverURL, origionalServerURL,
+		"serverURL shouldn't have changed if rename failed")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 

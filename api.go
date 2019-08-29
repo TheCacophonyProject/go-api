@@ -601,7 +601,7 @@ func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error
 	conf := &Config{
 		DeviceName: newName,
 		Group:      newGroup,
-		ServerURL:  api.getAPIURL(),
+		ServerURL:  api.serverURL,
 		filePath:   DeviceConfigPath,
 	}
 
