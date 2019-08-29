@@ -394,7 +394,8 @@ func TestFileDownload(t *testing.T) {
 	assert.Equal(t, rawFileData, string(fileData))
 }
 
-func TestDeviceRename(t *testing.T) {
+func TestDeviceReregister(t *testing.T) {
+	newFs(t)
 	newFs(t)
 	api, err := randomRegister()
 	require.NoError(t, err)
@@ -403,25 +404,36 @@ func TestDeviceRename(t *testing.T) {
 
 	originalName := api.device.name
 	originalGroup := api.device.group
+	origionalToken := api.token
+	origionalPassword := api.Password()
 	newName := randString(10)
 	notAGroupName := randString(10)
+	newPassword := randString(10)
 
-	// fail to rename
-	require.Error(t, api.Rename(newName, notAGroupName),
+	// fail to reregister
+	require.Error(t, api.Reregister(newName, notAGroupName, newPassword),
 		"shouldn't be able to change to a group that doesn't exist")
 	assert.Equal(t, api.device.name, originalName,
 		"name shouldn't have changed if rename failed")
 	assert.Equal(t, api.device.group, originalGroup,
-		"name shouldn't have changed if rename failed")
+		"group shouldn't have changed if rename failed")
+	assert.Equal(t, api.token, origionalToken,
+		"JWT shouldn't have changed if rename failed")
+	assert.Equal(t, api.Password(), origionalPassword,
+		"password shouldn't have changed if rename failed")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 
-	// rename
-	require.NoError(t, api.Rename(newName, defaultGroup2))
+	// reregister
+	require.NoError(t, api.Reregister(newName, defaultGroup2, newPassword))
 	assert.Equal(t, api.device.name, newName,
 		"name should have changed to the new name")
 	assert.Equal(t, api.device.group, defaultGroup2,
 		"group should have changed to the new group")
+	assert.NotEqual(t, api.token, origionalToken,
+		"JWT should have changed")
+	assert.Equal(t, api.Password(), newPassword,
+		"password should have changed to the new password")
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 

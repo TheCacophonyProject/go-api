@@ -536,19 +536,29 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-// Rename can change the device name and group
-func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
+// Reregister will register getting a new name and/or group
+func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error {
 
 	data := map[string]string{
-		"newName":  newName,
-		"newGroup": newGroup,
+		"newName":     newName,
+		"newGroup":    newGroup,
+		"newPassword": newPassword,
 	}
 	jsonAll, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
 
-	url := joinURL(api.serverURL, apiBasePath, "devices/rename")
+	// Lock safe config files
+	lsConf := NewLockSafeConfig(RegisteredConfigPath)
+	if locked, err := lsConf.GetExLock(); err != nil {
+		return err
+	} else if !locked {
+		return errors.New("could not lock private config file")
+	}
+	defer lsConf.Unlock()
+
+	url := joinURL(api.serverURL, apiBasePath, "devices/reregister")
 	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
 	if err != nil {
 		return err
@@ -566,10 +576,36 @@ func (api *CacophonyAPI) Rename(newName string, newGroup string) error {
 		return err
 	}
 
-	api.device.group = newGroup
-	api.device.name = newName
+	var respData tokenResponse
+	d := json.NewDecoder(resp.Body)
+	if err := d.Decode(&respData); err != nil {
+		return fmt.Errorf("decode: %v", err)
+	}
+	api.device = &CacophonyDevice{
+		id:       respData.ID,
+		group:    newGroup,
+		name:     newName,
+		password: newPassword,
+	}
 
 	if err := updateConfNameAndGroup(newName, newGroup, DeviceConfigPath); err != nil {
+		return err
+	}
+
+	api.token = respData.Token
+	api.device.password = newPassword
+	if err := lsConf.Write(api.device.id, api.Password()); err != nil {
+		return err
+	}
+
+	conf := &Config{
+		DeviceName: newName,
+		Group:      newGroup,
+		ServerURL:  api.getAPIURL(),
+		filePath:   DeviceConfigPath,
+	}
+
+	if err := conf.write(); err != nil {
 		return err
 	}
 
