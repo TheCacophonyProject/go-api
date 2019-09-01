@@ -451,6 +451,8 @@ func TestDeviceReregister(t *testing.T) {
 		"group should have changed to the new group")
 	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api2))
+	reader := strings.NewReader(rawThermalData)
+	assert.NoError(t, api2.UploadThermalRaw(reader))
 }
 
 func TestLoadConfig(t *testing.T) {
