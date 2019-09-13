@@ -54,9 +54,11 @@ const (
 `
 )
 
+const rawFileSize = 100
+
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
-var rawFileData = randString(100)
+var rawFileData = randString(rawFileSize)
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
 func TestNewTokenHttpRequest(t *testing.T) {
@@ -384,13 +386,15 @@ func TestFileDownload(t *testing.T) {
 
 	filePath := path.Join(os.TempDir(), randString(10))
 	defer os.Remove(filePath)
+
 	fileResponse, err := api.GetFileDetails(fileID)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	err = api.DownloadFile(fileResponse, filePath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
+	assert.Equal(t, fileResponse.FileSize, rawFileSize)
 
 	fileData, err := ioutil.ReadFile(filePath)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, rawFileData, string(fileData))
 }
 
@@ -479,30 +483,31 @@ func uploadFile(userToken string, t *testing.T) int {
 	dataBuf, err := json.Marshal(map[string]string{
 		"type": "audiobait",
 	})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.NoError(t, w.WriteField("data", string(dataBuf)))
 
 	fw, err := w.CreateFormFile("file", "file")
 	assert.NoError(t, err)
 
 	r := strings.NewReader(rawFileData)
-	io.Copy(fw, r)
+	_, err = io.Copy(fw, r)
+	require.NoError(t, err)
 	w.Close()
 
 	url := joinURL(apiURL, apiBasePath, filesURL)
 	req, err := http.NewRequest("POST", url, buf)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Authorization", userToken)
 
 	resp, err := newHTTPClient().Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	defer resp.Body.Close()
 
 	d := json.NewDecoder(resp.Body)
 	var respData fileUploadResponse
-	assert.NoError(t, d.Decode(&respData))
+	require.NoError(t, d.Decode(&respData))
 	return respData.RecordingId
 }
 

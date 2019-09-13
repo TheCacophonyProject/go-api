@@ -404,8 +404,9 @@ func (api *CacophonyAPI) getFileFromJWT(jwt, filePath string) error {
 }
 
 type FileResponse struct {
-	File FileInfo
-	Jwt  string
+	File     FileInfo
+	Jwt      string
+	FileSize int
 }
 
 type FileInfo struct {
