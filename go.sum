@@ -5,8 +5,6 @@ github.com/Masterminds/glide v0.13.2/go.mod h1:STyF5vcenH/rUqTEv+/hBXlSTo7KYwg2o
 github.com/Masterminds/semver v1.4.2/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Masterminds/vcs v1.13.0/go.mod h1:N09YCmOQr6RLxC6UNHzuVwAdodYbbnycGHSmwVJjcKA=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
-github.com/TheCacophonyProject/go-config v0.0.0-20190912230121-3ae512e4ea95 h1:+ovLYC5Re+Q9NTChbgJ36PzeSQlOXbSWZQVC+yD47Ak=
-github.com/TheCacophonyProject/go-config v0.0.0-20190912230121-3ae512e4ea95/go.mod h1:gPUJLVu408NRz9/P3BrsxzOzLc+KJLrv+jVdDw3RI0Y=
 github.com/TheCacophonyProject/go-config v0.0.0-20190922224052-7c2a21bc6b88 h1:b3CpL57RUjdlgRmm54qNj37tLEwmJzNDvxOXX7GHYBw=
 github.com/TheCacophonyProject/go-config v0.0.0-20190922224052-7c2a21bc6b88/go.mod h1:gPUJLVu408NRz9/P3BrsxzOzLc+KJLrv+jVdDw3RI0Y=
 github.com/TheCacophonyProject/window v0.0.0-20190821235241-ab92c2ee24b6 h1:aLER2Au+/pJe9FzTW7lmQJIOLO8bgio5i/Uzx/EGEmE=
