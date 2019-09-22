@@ -32,7 +32,7 @@ import (
 	"time"
 
 	goconfig "github.com/TheCacophonyProject/go-config"
-	"github.com/TheCacophonyProject/go-config/testify"
+	"github.com/TheCacophonyProject/go-config/configtest"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -492,7 +492,7 @@ func newFs(t *testing.T, configFile string) func() {
 	goconfig.SetFs(Fs)
 	require.NoError(t, afero.WriteFile(Fs, hostsFile, []byte(hostsFileString), 0644))
 	fsConfigFile := path.Join(goconfig.DefaultConfigDir, goconfig.ConfigFileName)
-	lockFileFunc, cleanupFunc := testify.WriteConfigFromFile(t, configFile, fsConfigFile, Fs)
+	lockFileFunc, cleanupFunc := configtest.WriteConfigFromFile(t, configFile, fsConfigFile, Fs)
 	goconfig.SetLockFilePath(lockFileFunc)
 	return cleanupFunc
 }
