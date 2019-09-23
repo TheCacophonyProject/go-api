@@ -31,10 +31,11 @@ import (
 	"testing"
 	"time"
 
+	goconfig "github.com/TheCacophonyProject/go-config"
+	"github.com/TheCacophonyProject/go-config/configtest"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	yaml "gopkg.in/yaml.v2"
 )
 
 // tests against cacophony-api require apiURL to be pointing
@@ -190,7 +191,7 @@ func randomRegister() (*CacophonyAPI, error) {
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
-	newFs(t)
+	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
@@ -204,7 +205,7 @@ func getTestEvent() ([]byte, []time.Time) {
 }
 
 func TestAPIReportEvent(t *testing.T) {
-	newFs(t)
+	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
 	details, timeStamps := getTestEvent()
@@ -212,83 +213,9 @@ func TestAPIReportEvent(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func getTempPasswordConfig(t *testing.T) (string, func(), *LockSafeConfig, *LockSafeConfig) {
-	tmpFile, err := ioutil.TempFile("", "test-password")
-	require.NoError(t, err, "Must be able to create test password file")
-	tmpFile.Close()
-	cleanUpFunc := func() {
-		_ = os.Remove(tmpFile.Name())
-	}
-
-	confPassword := NewLockSafeConfig(tmpFile.Name())
-	anotherConfPassword := NewLockSafeConfig(tmpFile.Name())
-
-	return tmpFile.Name(), cleanUpFunc, confPassword, anotherConfPassword
-}
-
-func TestPasswordLock(t *testing.T) {
-	filename, cleanUp, confPassword, anotherConfPassword := getTempPasswordConfig(t)
-	defer cleanUp()
-	tempPassword := randString(20)
-
-	err := confPassword.Write(1, tempPassword)
-	assert.Error(t, err)
-
-	locked, err := confPassword.GetExLock()
-	defer confPassword.Unlock()
-	require.True(t, locked, "File lock must succeed")
-	require.NoError(t, err, "must be able to get lock "+filename)
-
-	err = confPassword.Write(2, tempPassword)
-	require.NoError(t, err, "must be able to write to"+filename)
-
-	locked, err = anotherConfPassword.GetExLock()
-	assert.Error(t, err)
-	assert.False(t, locked)
-
-	err = anotherConfPassword.Write(3, randString(20))
-	assert.Error(t, err)
-	confPassword.Unlock()
-
-	conf, err := confPassword.Read()
-	assert.NoError(t, err)
-	assert.Equal(t, tempPassword, conf.Password)
-
-	tempPassword = randString(20)
-	locked, err = anotherConfPassword.GetExLock()
-	defer anotherConfPassword.Unlock()
-	assert.NoError(t, err)
-	assert.True(t, locked)
-
-	err = anotherConfPassword.Write(1, tempPassword)
-	assert.NoError(t, err)
-
-	conf, err = anotherConfPassword.Read()
-	assert.NoError(t, err)
-	assert.Equal(t, tempPassword, conf.Password)
-
-	err = os.Remove(filename)
-}
-
-//createTestConfig creates device.yaml
-func createTestConfig(t *testing.T) string {
-	conf := &Config{
-		ServerURL:  apiURL,
-		Group:      defaultGroup,
-		DeviceName: randString(10),
-	}
-	d, err := yaml.Marshal(conf)
-	require.NoError(t, err, "Must be able to make Config yaml")
-
-	Fs = afero.NewMemMapFs()
-	afero.WriteFile(Fs, DeviceConfigPath, d, 0600)
-
-	return DeviceConfigPath
-}
-
 // runMultipleRegistrations registers supplied count APIs with configFile on multiple threads
 // and returns a channel in which the registered passwords will be supplied
-func runMultipleRegistrations(configFile string, count int) (int, chan string) {
+func runMultipleRegistrations(count int) (int, chan string) {
 	messages := make(chan string)
 
 	for i := 0; i < count; i++ {
@@ -305,8 +232,7 @@ func runMultipleRegistrations(configFile string, count int) (int, chan string) {
 }
 
 func TestMultipleRegistrations(t *testing.T) {
-	configFile := createTestConfig(t)
-	count, passwords := runMultipleRegistrations(configFile, 4)
+	count, passwords := runMultipleRegistrations(4)
 	password := <-passwords
 	for i := 1; i < count; i++ {
 		pass := <-passwords
@@ -315,11 +241,11 @@ func TestMultipleRegistrations(t *testing.T) {
 }
 
 func TestRegisterAndNew(t *testing.T) {
-	newFs(t)
+	defer newFs(t, "")()
 
 	_, err := New()
 	assert.Error(t, err, "error must be thrown if not yet registered")
-	assert.True(t, IsNotRegisteredError(err))
+	assert.True(t, IsNotRegisteredError(err), err.Error())
 
 	name := randString(10)
 	password := randString(10)
@@ -376,7 +302,7 @@ func getAPI(url, password string, register bool) *CacophonyAPI {
 }
 
 func TestFileDownload(t *testing.T) {
-	newFs(t)
+	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
 
@@ -399,8 +325,7 @@ func TestFileDownload(t *testing.T) {
 }
 
 func TestDeviceReregister(t *testing.T) {
-	newFs(t)
-	newFs(t)
+	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
 	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
@@ -460,16 +385,22 @@ func TestDeviceReregister(t *testing.T) {
 }
 
 func TestLoadConfig(t *testing.T) {
-	newFs(t)
-	_, err := LoadConfig()
-	require.True(t, IsNotRegisteredError(err))
+	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
-	config, err := LoadConfig()
+	config, err := NewConfig(goconfig.DefaultConfigDir)
 	require.NoError(t, err)
+	require.NoError(t, config.read())
 	require.Equal(t, api.DeviceName(), config.DeviceName)
 	require.Equal(t, api.GroupName(), config.Group)
 	require.Equal(t, api.serverURL, config.ServerURL)
+}
+
+func TestBadConfig(t *testing.T) {
+	defer newFs(t, "./test-files/bad-config.toml")()
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
+	require.NoError(t, err)
+	require.Error(t, conf.read())
 }
 
 func TestStringProcessing(t *testing.T) {
@@ -556,7 +487,12 @@ func checkHostsFile(api *CacophonyAPI) error {
 	return fmt.Errorf("hosts file not formatted correctly. Could not find '%s'", substr)
 }
 
-func newFs(t *testing.T) {
+func newFs(t *testing.T, configFile string) func() {
 	Fs = afero.NewMemMapFs()
+	goconfig.SetFs(Fs)
 	require.NoError(t, afero.WriteFile(Fs, hostsFile, []byte(hostsFileString), 0644))
+	fsConfigFile := path.Join(goconfig.DefaultConfigDir, goconfig.ConfigFileName)
+	lockFileFunc, cleanupFunc := configtest.WriteConfigFromFile(t, configFile, fsConfigFile, Fs)
+	goconfig.SetLockFilePath(lockFileFunc)
+	return cleanupFunc
 }

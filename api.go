@@ -32,6 +32,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	goconfig "github.com/TheCacophonyProject/go-config"
 )
 
 const (
@@ -98,39 +100,20 @@ func (api *CacophonyAPI) GroupName() string {
 // apiFromConfig creates a CacophonyAPI from the config files. The API will need
 // to be registered or be authenticated before used.
 func apiFromConfig() (*CacophonyAPI, error) {
-	conf, err := GetConfig(DeviceConfigPath)
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
 	if err != nil {
 		return nil, err
 	}
-	lockSafeConfig := NewLockSafeConfig(RegisteredConfigPath)
-	_, err = lockSafeConfig.Read()
-	if err != nil {
+	if err := conf.read(); err != nil {
 		return nil, err
-	}
-
-	if lockSafeConfig.config == nil || !lockSafeConfig.config.IsValid() {
-		locked, err := lockSafeConfig.GetExLock()
-		if locked == false || err != nil {
-			return nil, err
-		}
-		defer lockSafeConfig.Unlock()
-
-		//read again in case was just written to while waiting for exlock
-		_, err = lockSafeConfig.Read()
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	device := &CacophonyDevice{
-		group: conf.Group,
-		name:  conf.DeviceName,
+		group:    conf.Group,
+		name:     conf.DeviceName,
+		id:       conf.DeviceID,
+		password: conf.DevicePassword,
 	}
-	if lockSafeConfig.config != nil {
-		device.password = lockSafeConfig.config.Password
-		device.id = lockSafeConfig.config.DeviceID
-	}
-
 	api := &CacophonyAPI{
 		serverURL:  conf.ServerURL,
 		device:     device,
@@ -161,26 +144,18 @@ func Register(devicename string, password string, group string, apiURL string) (
 		return nil, err
 	}
 
-	conf := &Config{
-		DeviceName: devicename,
-		Group:      group,
-		ServerURL:  url.String(),
-		filePath:   DeviceConfigPath,
-	}
-	if exists, err := conf.exists(); exists {
-		return nil, errors.New("device config file exists")
-	} else if err != nil {
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
+	if err != nil {
 		return nil, err
 	}
 
-	// Lock safe config files
-	lsConf := NewLockSafeConfig(RegisteredConfigPath)
-	if locked, err := lsConf.GetExLock(); err != nil {
+	if err := conf.read(); err != nil {
 		return nil, err
-	} else if !locked {
-		return nil, errors.New("could not lock private config file")
 	}
-	defer lsConf.Unlock()
+
+	if conf.Registered() {
+		return nil, errors.New("device is already registered")
+	}
 
 	payload, err := json.Marshal(map[string]string{
 		"group":      group,
@@ -221,10 +196,12 @@ func Register(devicename string, password string, group string, apiURL string) (
 		password: password,
 	}
 	api.token = respData.Token
-	if err := lsConf.Write(api.device.id, api.Password()); err != nil {
-		return nil, err
-	}
 
+	conf.DeviceID = respData.ID
+	conf.DeviceName = devicename
+	conf.DevicePassword = password
+	conf.Group = group
+	conf.ServerURL = url.String()
 	if err := conf.write(); err != nil {
 		return nil, err
 	}
@@ -236,7 +213,6 @@ func Register(devicename string, password string, group string, apiURL string) (
 
 // authenticate a device with Cacophony API and retrieves the token
 func (api *CacophonyAPI) authenticate() error {
-
 	if api.device.password == "" {
 		return notRegisteredError
 	}
@@ -550,15 +526,6 @@ func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error
 		return err
 	}
 
-	// Lock safe config files
-	lsConf := NewLockSafeConfig(RegisteredConfigPath)
-	if locked, err := lsConf.GetExLock(); err != nil {
-		return err
-	} else if !locked {
-		return errors.New("could not lock private config file")
-	}
-	defer lsConf.Unlock()
-
 	url := joinURL(api.serverURL, apiBasePath, "devices/reregister")
 	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
 	if err != nil {
@@ -589,22 +556,19 @@ func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error
 		password: newPassword,
 	}
 
-	if err := updateConfNameAndGroup(newName, newGroup, DeviceConfigPath); err != nil {
-		return err
-	}
-
 	api.token = respData.Token
 	api.device.password = newPassword
-	if err := lsConf.Write(api.device.id, api.Password()); err != nil {
+
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
+	if err != nil {
 		return err
 	}
 
-	conf := &Config{
-		DeviceName: newName,
-		Group:      newGroup,
-		ServerURL:  api.serverURL,
-		filePath:   DeviceConfigPath,
-	}
+	conf.DeviceName = newName
+	conf.Group = newGroup
+	conf.ServerURL = api.serverURL
+	conf.DevicePassword = newPassword
+	conf.DeviceID = respData.ID
 
 	if err := conf.write(); err != nil {
 		return err
