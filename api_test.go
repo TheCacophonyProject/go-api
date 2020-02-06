@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -61,6 +62,21 @@ var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
 var rawFileData = randString(rawFileSize)
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
+
+func TestMain(m *testing.M) {
+	api := getAPI(apiURL, defaultPassword, false)
+	api.device.name = defaultDevice
+	err := api.authenticate()
+	if err != nil {
+		log.Println(err)
+		log.Printf(`
+	failed to authenticate to API.
+	Check that you have a cacophony-api running on '%s' and have run 'test-seed.sql'
+	Check README.md for more details.`, apiURL)
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
 
 func TestNewTokenHttpRequest(t *testing.T) {
 	ts := GetNewAuthenticateServer(t)
