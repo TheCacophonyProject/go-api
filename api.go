@@ -119,7 +119,6 @@ func apiFromConfig() (*CacophonyAPI, error) {
 		device:     device,
 		httpClient: newHTTPClient(),
 	}
-
 	return api, err
 }
 
@@ -275,99 +274,22 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-// AddTrack
-func (api *CacophonyAPI) AddTrack(track map[string]interface{}, algorithm map[string]interface{}, recordingId int) (int, error) {
-	// JSON encoded "data" parameter.
-	trackJSON, err := json.Marshal(track)
-	if err != nil {
-		return 0, err
-	}
-
-	data := map[string]interface{}{
-		"data":      trackJSON,
-		"algorithm": algorithm,
-	}
-	jsonAll, err := json.Marshal(data)
-	if err != nil {
-		return 0, err
-	}
-	url := joinURL(api.serverURL, apiBasePath, string(recordingId), "tracks")
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", api.token)
-
-	resp, err := api.httpClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if err := handleHTTPResponse(resp); err != nil {
-		return 0, err
-	}
-	var tr trackResponse
-	d := json.NewDecoder(resp.Body)
-	if err := d.Decode(&tr); err != nil {
-		return 0, err
-	}
-	return tr.TrackId, nil
-}
-
-// AddTrackTag
-func (api *CacophonyAPI) AddTrackTag(recordingId, trackId int, track map[string]interface{}, model map[string]interface{}) (int, error) {
-	// JSON encoded "data" parameter.
-	modelJSON, err := json.Marshal(model)
-	if err != nil {
-		return 0, err
-	}
-
-	data := map[string]interface{}{
-		"what":       track["confidence_tag"],
-		"confidence": track["confidence"],
-		"data":       modelJSON,
-	}
-	jsonAll, err := json.Marshal(data)
-	if err != nil {
-		return 0, err
-	}
-	url := joinURL(api.serverURL, apiBasePath, string(recordingId), "tracks", string(trackId), "tags")
-	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", api.token)
-
-	resp, err := api.httpClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	if err := handleHTTPResponse(resp); err != nil {
-		return 0, err
-	}
-	var tr trackTagResponse
-	d := json.NewDecoder(resp.Body)
-	if err := d.Decode(&tr); err != nil {
-		return 0, err
-	}
-	return tr.TrackTagId, nil
-}
-
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
 // with data of type thermalRaw specified
-func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) (int, error) {
+func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
 
+	data := map[string]interface{}{
+		"type":  "thermalRaw",
+	}
+
+	if metadata != nil {
+		data["metadata"] = metadata
+	}
 	// JSON encoded "data" parameter.
-	dataBuf, err := json.Marshal(map[string]string{
-		"type": "thermalRaw",
-	})
+	dataBuf, err := json.Marshal(data)
+
 	if err != nil {
 		return 0, err
 	}
@@ -404,7 +326,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) (int, error) {
 	if err := d.Decode(&fr); err != nil {
 		return 0, err
 	}
-	return fr.RecordingId, nil
+	return fr.RecordingID, nil
 }
 
 type tokenResponse struct {
@@ -414,19 +336,9 @@ type tokenResponse struct {
 }
 
 type fileUploadResponse struct {
-	RecordingId int
+	RecordingID int
 	StatusCode  int
 	Messages    []string
-}
-type trackTagResponse struct {
-	TrackTagId int
-	StatusCode int
-	Messages   []string
-}
-type trackResponse struct {
-	TrackId    int
-	StatusCode int
-	Messages   []string
 }
 
 // message gets the first message of the supplised tokenResponse if present

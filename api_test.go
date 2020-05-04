@@ -93,7 +93,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 
 	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
-	id, err := api.UploadThermalRaw(reader)
+	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -192,7 +192,7 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 		w.WriteHeader(responseHeader)
 
 		var fr fileUploadResponse
-		fr.RecordingId = 1
+		fr.RecordingID = 1
 		fr.StatusCode = 200
 		fr.Messages = []string{"All G"}
 		json.NewEncoder(w).Encode(fr)
@@ -217,7 +217,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	api, err := randomRegister()
 	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
-	id, err := api.UploadThermalRaw(reader)
+	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -291,7 +291,7 @@ func TestRegisterAndNew(t *testing.T) {
 
 	reader := strings.NewReader(rawThermalData)
 
-	id, err := api2.UploadThermalRaw(reader)
+	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err, "check that api can upload recordings")
 	assert.NotEmpty(t, id, "check that recording id is not 0")
 
@@ -410,7 +410,7 @@ func TestDeviceReregister(t *testing.T) {
 	assert.NoError(t, checkHostsFile(api2))
 	reader := strings.NewReader(rawThermalData)
 
-	id, err := api2.UploadThermalRaw(reader)
+	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -470,7 +470,7 @@ func uploadFile(userToken string, t *testing.T) int {
 	d := json.NewDecoder(resp.Body)
 	var respData fileUploadResponse
 	require.NoError(t, d.Decode(&respData))
-	return respData.RecordingId
+	return respData.RecordingID
 }
 
 // getUserToken is needed for testing purposes to be able to upload files as a
