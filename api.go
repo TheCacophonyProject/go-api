@@ -281,7 +281,7 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]inter
 	w := multipart.NewWriter(buf)
 
 	data := map[string]interface{}{
-		"type":  "thermalRaw",
+		"type": "thermalRaw",
 	}
 
 	if metadata != nil {
