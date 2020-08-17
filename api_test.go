@@ -93,8 +93,9 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 
 	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
-	err := api.UploadThermalRaw(reader)
+	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
+	assert.NotEmpty(t, id)
 }
 
 func getTokenResponse() *tokenResponse {
@@ -188,8 +189,13 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 		dataType, file := getMimeParts(r)
 		assert.Equal(t, "{\"type\":\"thermalRaw\"}", dataType)
 		assert.Equal(t, rawThermalData, file)
-
 		w.WriteHeader(responseHeader)
+
+		var fr fileUploadResponse
+		fr.RecordingID = 1
+		fr.StatusCode = 200
+		fr.Messages = []string{"All G"}
+		json.NewEncoder(w).Encode(fr)
 	}))
 	return ts
 }
@@ -211,7 +217,9 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	api, err := randomRegister()
 	require.NoError(t, err)
 	reader := strings.NewReader(rawThermalData)
-	assert.NoError(t, api.UploadThermalRaw(reader))
+	id, err := api.UploadThermalRaw(reader, nil)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, id)
 }
 
 func getTestEvent() ([]byte, []time.Time) {
@@ -282,7 +290,11 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.NoError(t, checkHostsFile(api2))
 
 	reader := strings.NewReader(rawThermalData)
-	assert.NoError(t, api2.UploadThermalRaw(reader), "check that api can upload recordings")
+
+	id, err := api2.UploadThermalRaw(reader, nil)
+	assert.NoError(t, err, "check that api can upload recordings")
+	assert.NotEmpty(t, id, "check that recording id is not 0")
+
 	assert.NoError(t, checkHostsFile(api2))
 
 	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
@@ -397,7 +409,10 @@ func TestDeviceReregister(t *testing.T) {
 	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api2))
 	reader := strings.NewReader(rawThermalData)
-	assert.NoError(t, api2.UploadThermalRaw(reader))
+
+	id, err := api2.UploadThermalRaw(reader, nil)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, id)
 }
 
 func TestLoadConfig(t *testing.T) {
@@ -455,7 +470,7 @@ func uploadFile(userToken string, t *testing.T) int {
 	d := json.NewDecoder(resp.Body)
 	var respData fileUploadResponse
 	require.NoError(t, d.Decode(&respData))
-	return respData.RecordingId
+	return respData.RecordingID
 }
 
 // getUserToken is needed for testing purposes to be able to upload files as a

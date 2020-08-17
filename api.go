@@ -119,7 +119,6 @@ func apiFromConfig() (*CacophonyAPI, error) {
 		device:     device,
 		httpClient: newHTTPClient(),
 	}
-
 	return api, err
 }
 
@@ -277,47 +276,57 @@ func newHTTPClient() *http.Client {
 
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
 // with data of type thermalRaw specified
-func (api *CacophonyAPI) UploadThermalRaw(r io.Reader) error {
+func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
 
-	// JSON encoded "data" parameter.
-	dataBuf, err := json.Marshal(map[string]string{
+	data := map[string]interface{}{
 		"type": "thermalRaw",
-	})
+	}
+
+	if metadata != nil {
+		data["metadata"] = metadata
+	}
+	// JSON encoded "data" parameter.
+	dataBuf, err := json.Marshal(data)
+
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if err := w.WriteField("data", string(dataBuf)); err != nil {
-		return err
+		return 0, err
 	}
 
 	// Add the file as a new MIME part.
 	fw, err := w.CreateFormFile("file", "file")
 	if err != nil {
-		return err
+		return 0, err
 	}
 	io.Copy(fw, r)
 	w.Close()
 
 	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), buf)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Authorization", api.token)
 
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
 	if err := handleHTTPResponse(resp); err != nil {
-		return err
+		return 0, err
 	}
-
-	return nil
+	var fr fileUploadResponse
+	d := json.NewDecoder(resp.Body)
+	if err := d.Decode(&fr); err != nil {
+		return 0, err
+	}
+	return fr.RecordingID, nil
 }
 
 type tokenResponse struct {
@@ -327,8 +336,8 @@ type tokenResponse struct {
 }
 
 type fileUploadResponse struct {
-	RecordingId int
-	Success     bool
+	RecordingID int
+	StatusCode  int
 	Messages    []string
 }
 
