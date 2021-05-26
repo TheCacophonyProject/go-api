@@ -17,6 +17,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -274,6 +275,15 @@ func newHTTPClient() *http.Client {
 	}
 }
 
+func md5Hash(r io.Reader) (string, error) {
+	h := md5.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return "", err
+	}
+	hashString := fmt.Sprintf("%x", h.Sum(nil))
+	return hashString, nil
+}
+
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
 // with data of type thermalRaw specified
 func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]interface{}) (int, error) {
@@ -298,13 +308,20 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]inter
 	}
 
 	// Add the file as a new MIME part.
-	fw, err := w.CreateFormFile("file", "file")
+	//This will write to fileBytes as it reads r to get the md5 hash
+	var fileBytes bytes.Buffer
+	tee := io.TeeReader(r, &fileBytes)
+	md5, err := md5Hash(tee)
 	if err != nil {
 		return 0, err
 	}
-	io.Copy(fw, r)
-	w.Close()
+	if err := w.WriteField("MD5", md5); err != nil {
+		return 0, err
+	}
 
+	fw, err := w.CreateFormFile("file", "file")
+	io.Copy(fw, &fileBytes)
+	w.Close()
 	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), buf)
 	if err != nil {
 		return 0, err
