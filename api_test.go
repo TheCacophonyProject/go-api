@@ -61,6 +61,7 @@ const rawFileSize = 100
 var responseHeader = http.StatusOK
 var rawThermalData = randString(100)
 var rawFileData = randString(rawFileSize)
+var testCPTVFile = "test-files/test.cptv"
 var testEventDetail = `{"description": {"type": "test-id", "details": {"tail":"fuzzy"} } }`
 
 func TestMain(m *testing.M) {
@@ -151,13 +152,14 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 }
 
 //getMimeParts retrieves data and  file:file and Value:data from a multipart request
-func getMimeParts(r *http.Request) (string, string) {
+func getMimeParts(r *http.Request) (map[string]interface{}, string) {
 	partReader, err := r.MultipartReader()
 
-	var fileData, dataType string
+	var fileData string
+	var data map[string]interface{}
 	form, err := partReader.ReadForm(1000)
 	if err != nil {
-		return "", ""
+		return data, ""
 	}
 
 	if val, ok := form.File["file"]; ok {
@@ -174,9 +176,9 @@ func getMimeParts(r *http.Request) (string, string) {
 	}
 
 	if val, ok := form.Value["data"]; ok {
-		dataType = val[0]
+	 json.Unmarshal( []byte(val[0]), &data)
 	}
-	return dataType, fileData
+	return data, fileData
 }
 
 //GetUploadThermalRawServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
@@ -187,7 +189,10 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 		assert.NotEmpty(t, r.Header.Get("Authorization"))
 
 		dataType, file := getMimeParts(r)
-		assert.Equal(t, "{\"type\":\"thermalRaw\"}", dataType)
+		assert.Equal(t, "thermalRaw", dataType["type"])
+		_ ,hashExists := dataType["fileHash"]
+		assert.True(t, hashExists)
+
 		assert.Equal(t, rawThermalData, file)
 		w.WriteHeader(responseHeader)
 
@@ -216,7 +221,10 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
-	reader := strings.NewReader(rawThermalData)
+
+	reader, err := os.Open(testCPTVFile)
+	defer reader.Close()
+
 	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
@@ -289,7 +297,9 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
 	assert.NoError(t, checkHostsFile(api2))
 
-	reader := strings.NewReader(rawThermalData)
+
+	reader, err := os.Open(testCPTVFile)
+	defer reader.Close()
 
 	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err, "check that api can upload recordings")
@@ -408,7 +418,9 @@ func TestDeviceReregister(t *testing.T) {
 		"group should have changed to the new group")
 	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api2))
-	reader := strings.NewReader(rawThermalData)
+
+	reader, err := os.Open(testCPTVFile)
+	defer reader.Close()
 
 	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
