@@ -176,7 +176,7 @@ func getMimeParts(r *http.Request) (map[string]interface{}, string) {
 	}
 
 	if val, ok := form.Value["data"]; ok {
-	 json.Unmarshal( []byte(val[0]), &data)
+		json.Unmarshal([]byte(val[0]), &data)
 	}
 	return data, fileData
 }
@@ -190,7 +190,7 @@ func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
 
 		dataType, file := getMimeParts(r)
 		assert.Equal(t, "thermalRaw", dataType["type"])
-		_ ,hashExists := dataType["fileHash"]
+		_, hashExists := dataType["fileHash"]
 		assert.True(t, hashExists)
 
 		assert.Equal(t, rawThermalData, file)
@@ -296,7 +296,6 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api2.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
 	assert.NoError(t, checkHostsFile(api2))
-
 
 	reader, err := os.Open(testCPTVFile)
 	defer reader.Close()

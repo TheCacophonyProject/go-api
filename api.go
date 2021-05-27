@@ -298,8 +298,8 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]inter
 	}
 
 	data := map[string]interface{}{
-		"type": "thermalRaw",
-		"fileHash":  hash,
+		"type":     "thermalRaw",
+		"fileHash": hash,
 	}
 
 	if metadata != nil {
