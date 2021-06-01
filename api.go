@@ -17,6 +17,7 @@ package api
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -274,14 +275,31 @@ func newHTTPClient() *http.Client {
 	}
 }
 
+func shaHash(r io.Reader) (string, error) {
+	h := sha1.New()
+	if _, err := io.Copy(h, r); err != nil {
+		return "", err
+	}
+	hashString := fmt.Sprintf("%x", h.Sum(nil))
+	return hashString, nil
+}
+
 // UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
 // with data of type thermalRaw specified
 func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
+	//This will write to fileBytes as it reads r to get the sha hash
+	var fileBytes bytes.Buffer
+	tee := io.TeeReader(r, &fileBytes)
+	hash, err := shaHash(tee)
+	if err != nil {
+		return 0, err
+	}
 
 	data := map[string]interface{}{
-		"type": "thermalRaw",
+		"type":     "thermalRaw",
+		"fileHash": hash,
 	}
 
 	if metadata != nil {
@@ -299,12 +317,8 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]inter
 
 	// Add the file as a new MIME part.
 	fw, err := w.CreateFormFile("file", "file")
-	if err != nil {
-		return 0, err
-	}
-	io.Copy(fw, r)
+	io.Copy(fw, &fileBytes)
 	w.Close()
-
 	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), buf)
 	if err != nil {
 		return 0, err
