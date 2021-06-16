@@ -50,6 +50,7 @@ type CacophonyDevice struct {
 	name     string
 	password string
 	id       int
+	saltId   int
 }
 
 type CacophonyAPI struct {
@@ -138,7 +139,7 @@ func New() (*CacophonyAPI, error) {
 
 // Register will check that there is not already device config files, will then
 // register with the given parameters and then save them in new config files.
-func Register(devicename string, password string, group string, apiURL string) (*CacophonyAPI, error) {
+func Register(devicename, password, group, apiURL string, saltId int) (*CacophonyAPI, error) {
 	url, err := url.Parse(apiURL)
 	if err != nil {
 		return nil, err
@@ -157,11 +158,15 @@ func Register(devicename string, password string, group string, apiURL string) (
 		return nil, errors.New("device is already registered")
 	}
 
-	payload, err := json.Marshal(map[string]string{
+	regData := map[string]interface{}{
 		"group":      group,
 		"devicename": devicename,
 		"password":   password,
-	})
+	}
+	if saltId != 0 {
+		regData["saltId"] = saltId
+	}
+	payload, err := json.Marshal(regData)
 	if err != nil {
 		return nil, err
 	}
@@ -194,6 +199,7 @@ func Register(devicename string, password string, group string, apiURL string) (
 		group:    group,
 		name:     devicename,
 		password: password,
+		saltId:   respData.SaltId,
 	}
 	api.token = respData.Token
 
@@ -317,6 +323,9 @@ func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, metadata map[string]inter
 
 	// Add the file as a new MIME part.
 	fw, err := w.CreateFormFile("file", "file")
+	if err != nil {
+		return 0, err
+	}
 	io.Copy(fw, &fileBytes)
 	w.Close()
 	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), buf)
@@ -347,6 +356,7 @@ type tokenResponse struct {
 	Messages []string
 	Token    string
 	ID       int
+	SaltId   int
 }
 
 type fileUploadResponse struct {
@@ -424,6 +434,9 @@ func (api *CacophonyAPI) GetFileDetails(fileID int) (*FileResponse, error) {
 	buf := new(bytes.Buffer)
 
 	req, err := http.NewRequest("GET", joinURL(api.serverURL, apiBasePath, "/files/"+strconv.Itoa(fileID)), buf)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Authorization", api.token)
 
 	resp, err := api.httpClient.Do(req)
@@ -524,6 +537,9 @@ func isHTTPClientError(code int) bool {
 // GetSchedule will get the audio schedule
 func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	req, err := http.NewRequest("GET", joinURL(api.serverURL, apiBasePath, "schedules"), nil)
+	if err != nil {
+		return nil, err
+	}
 	req.Header.Set("Authorization", api.token)
 	//client := new(http.Client)
 

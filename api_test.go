@@ -23,6 +23,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -153,7 +154,7 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 
 //getMimeParts retrieves data and  file:file and Value:data from a multipart request
 func getMimeParts(r *http.Request) (map[string]interface{}, string) {
-	partReader, err := r.MultipartReader()
+	partReader, _ := r.MultipartReader()
 
 	var fileData string
 	var data map[string]interface{}
@@ -214,7 +215,7 @@ func TestAPIAuthenticate(t *testing.T) {
 }
 
 func randomRegister() (*CacophonyAPI, error) {
-	return Register(randString(20), randString(20), defaultGroup, apiURL)
+	return Register(randString(20), randString(20), defaultGroup, apiURL, rand.Int())
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
@@ -223,6 +224,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	require.NoError(t, err)
 
 	reader, err := os.Open(testCPTVFile)
+	assert.NoError(t, err)
 	defer reader.Close()
 
 	id, err := api.UploadThermalRaw(reader, nil)
@@ -281,12 +283,13 @@ func TestRegisterAndNew(t *testing.T) {
 
 	name := randString(10)
 	password := randString(10)
-	api1, err := Register(name, password, defaultGroup, apiURL)
+	api1, err := Register(name, password, defaultGroup, apiURL, 100)
 	require.NoError(t, err, "failed to register")
 	assert.Equal(t, api1.device.name, name, "name does not match what was registered with")
 	assert.Equal(t, api1.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api1.Password(), password, "password does not match what was registered with")
 	assert.Equal(t, api1.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, 100, api1.device.saltId)
 	assert.NoError(t, checkHostsFile(api1))
 
 	api2, err := New()
@@ -298,6 +301,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.NoError(t, checkHostsFile(api2))
 
 	reader, err := os.Open(testCPTVFile)
+	assert.NoError(t, err)
 	defer reader.Close()
 
 	id, err := api2.UploadThermalRaw(reader, nil)
@@ -306,7 +310,7 @@ func TestRegisterAndNew(t *testing.T) {
 
 	assert.NoError(t, checkHostsFile(api2))
 
-	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL)
+	_, err = Register(name+"a", defaultPassword, defaultGroup, apiURL, 0)
 	assert.Error(t, err, "must not be able to register when the device is already registered")
 }
 
@@ -419,6 +423,7 @@ func TestDeviceReregister(t *testing.T) {
 	assert.NoError(t, checkHostsFile(api2))
 
 	reader, err := os.Open(testCPTVFile)
+	assert.NoError(t, err)
 	defer reader.Close()
 
 	id, err := api2.UploadThermalRaw(reader, nil)
