@@ -215,7 +215,7 @@ func TestAPIAuthenticate(t *testing.T) {
 }
 
 func randomRegister() (*CacophonyAPI, error) {
-	return Register(randString(20), randString(20), defaultGroup, apiURL, rand.Int())
+	return Register(randString(20), randString(20), defaultGroup, apiURL, int(rand.Int31()))
 }
 
 func TestAPIUploadThermalRaw(t *testing.T) {
