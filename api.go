@@ -631,3 +631,30 @@ var notRegisteredError = errors.New("device is not registered")
 func IsNotRegisteredError(err error) bool {
 	return err == notRegisteredError
 }
+
+// Send heart beat from device with expected next heart beat time
+func (api *CacophonyAPI) Heartbeat(nextHeartBeat time.Time) ([]byte, error) {
+	url := joinURL(api.serverURL, apiBasePath, "devices/heartbeat")
+	data := map[string]string{
+		"nextHeartbeat": nextHeartBeat.Format(time.RFC3339),
+	}
+	payload, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", api.token)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer resp.Body.Close()
+
+	return ioutil.ReadAll(resp.Body)
+}
