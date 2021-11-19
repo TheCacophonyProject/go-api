@@ -523,7 +523,7 @@ func handleHTTPResponse(resp *http.Response) error {
 
 //formatTimestamp to time.RFC3339 format
 func formatTimestamp(t time.Time) string {
-	return t.UTC().Format(time.RFC3339)
+	return t.UTC().Format(time.RFC3339Nano)
 }
 
 func isHTTPSuccess(code int) bool {
