@@ -521,7 +521,7 @@ func handleHTTPResponse(resp *http.Response) error {
 	return nil
 }
 
-//formatTimestamp to time.RFC3339 format
+//formatTimestamp to time.RFC3339Nano format
 func formatTimestamp(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
