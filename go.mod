@@ -1,6 +1,6 @@
 module github.com/TheCacophonyProject/go-api
 
-go 1.13
+go 1.17
 
 require (
 	github.com/TheCacophonyProject/go-config v1.7.0
