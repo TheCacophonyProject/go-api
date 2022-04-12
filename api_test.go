@@ -95,7 +95,7 @@ func TestUploadThermalRawHttpRequest(t *testing.T) {
 
 	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
-	id, err := api.UploadThermalRaw("", reader, nil)
+	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -227,7 +227,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api.UploadThermalRaw("thermalRaw", reader, nil)
+	id, err := api.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -304,7 +304,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api2.UploadThermalRaw("", reader, nil)
+	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err, "check that api can upload recordings")
 	assert.NotEmpty(t, id, "check that recording id is not 0")
 
@@ -426,7 +426,7 @@ func TestDeviceReregister(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api2.UploadThermalRaw("", reader, nil)
+	id, err := api2.UploadThermalRaw(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
