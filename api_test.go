@@ -89,13 +89,13 @@ func TestNewTokenHttpRequest(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestUploadThermalRawHttpRequest(t *testing.T) {
-	ts := GetUploadThermalRawServer(t)
+func TestUploadVideoHttpRequest(t *testing.T) {
+	ts := GetUploadVideoServer(t)
 	defer ts.Close()
 
 	api := getAPI(ts.URL, "", true)
 	reader := strings.NewReader(rawThermalData)
-	id, err := api.UploadThermalRaw(reader, nil)
+	id, err := api.UploadVideo(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -182,9 +182,9 @@ func getMimeParts(r *http.Request) (map[string]interface{}, string) {
 	return data, fileData
 }
 
-//GetUploadThermalRawServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
+//GetUploadVideoServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
 //and Authorization header
-func GetUploadThermalRawServer(t *testing.T) *httptest.Server {
+func GetUploadVideoServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
 		assert.NotEmpty(t, r.Header.Get("Authorization"))
@@ -218,7 +218,7 @@ func randomRegister() (*CacophonyAPI, error) {
 	return Register(randString(20), randString(20), defaultGroup, apiURL, int(rand.Int31()))
 }
 
-func TestAPIUploadThermalRaw(t *testing.T) {
+func TestAPIUploadVideo(t *testing.T) {
 	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
@@ -227,7 +227,7 @@ func TestAPIUploadThermalRaw(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api.UploadThermalRaw(reader, nil)
+	id, err := api.UploadVideo(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -304,7 +304,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api2.UploadThermalRaw(reader, nil)
+	id, err := api2.UploadVideo(reader, nil)
 	assert.NoError(t, err, "check that api can upload recordings")
 	assert.NotEmpty(t, id, "check that recording id is not 0")
 
@@ -426,7 +426,7 @@ func TestDeviceReregister(t *testing.T) {
 	assert.NoError(t, err)
 	defer reader.Close()
 
-	id, err := api2.UploadThermalRaw(reader, nil)
+	id, err := api2.UploadVideo(reader, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }

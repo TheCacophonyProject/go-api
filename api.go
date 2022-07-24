@@ -290,9 +290,8 @@ func shaHash(r io.Reader) (string, error) {
 	return hashString, nil
 }
 
-// UploadThermalRaw uploads the file to Cacophony API as a multipartmessage
-// with data of type thermalRaw specified
-func (api *CacophonyAPI) UploadThermalRaw(r io.Reader, data map[string]interface{}) (int, error) {
+// UploadVideo uploads the file to Cacophony API as a multipartmessage
+func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
 	//This will write to fileBytes as it reads r to get the sha hash
