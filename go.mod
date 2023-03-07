@@ -7,8 +7,7 @@ require (
 	github.com/TheCacophonyProject/lepton3 v0.0.0-20211005194419-22311c15d6ee // indirect
 	github.com/spf13/afero v1.6.0
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4 // indirect
-	golang.org/x/sys v0.0.0-20211117180635-dee7805ff2e1 // indirect
+	golang.org/x/net v0.7.0 // indirect
 	gopkg.in/ini.v1 v1.64.0 // indirect
 )
 
