@@ -62,7 +62,6 @@ type CacophonyAPI struct {
 
 // joinURL creates an absolute url with supplied baseURL, and all paths
 func joinURL(baseURL string, paths ...string) string {
-
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return ""
@@ -79,6 +78,7 @@ func (api *CacophonyAPI) getAPIURL() string {
 func (api *CacophonyAPI) getAuthURL() string {
 	return joinURL(api.serverURL, authURL)
 }
+
 func (api *CacophonyAPI) getRegURL() string {
 	return joinURL(api.serverURL, apiBasePath, regURL)
 }
@@ -233,7 +233,6 @@ func (api *CacophonyAPI) authenticate() error {
 		data["groupname"] = api.device.group
 	}
 	payload, err := json.Marshal(data)
-
 	if err != nil {
 		return err
 	}
@@ -294,7 +293,7 @@ func shaHash(r io.Reader) (string, error) {
 func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
-	//This will write to fileBytes as it reads r to get the sha hash
+	// This will write to fileBytes as it reads r to get the sha hash
 	var fileBytes bytes.Buffer
 	tee := io.TeeReader(r, &fileBytes)
 	hash, err := shaHash(tee)
@@ -311,7 +310,6 @@ func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (
 
 	// JSON encoded "data" parameter.
 	dataBuf, err := json.Marshal(data)
-
 	if err != nil {
 		return 0, err
 	}
@@ -519,7 +517,7 @@ func handleHTTPResponse(resp *http.Response) error {
 	return nil
 }
 
-//formatTimestamp to time.RFC3339Nano format
+// formatTimestamp to time.RFC3339Nano format
 func formatTimestamp(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
@@ -539,7 +537,7 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", api.token)
-	//client := new(http.Client)
+	// client := new(http.Client)
 
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
@@ -562,7 +560,6 @@ func (api *CacophonyAPI) ReRegisterByAuthorized(newName, newGroup, newPassword, 
 	if err != nil {
 		return err
 	}
-	log.Println("jsonAll", string(jsonAll))
 	url := joinURL(api.serverURL, apiBasePath, "devices/reregister-authorized")
 	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
 	if err != nil {
@@ -589,8 +586,6 @@ func (api *CacophonyAPI) ReRegisterByAuthorized(newName, newGroup, newPassword, 
 		name:     newName,
 		password: newPassword,
 	}
-	log.Println("respData.Token", respData.Token)
-	log.Println("respData.ID", respData.ID)
 
 	api.token = respData.Token
 	api.device.password = newPassword
