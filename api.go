@@ -550,9 +550,67 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+// This allows the device to be registered even
+func (api *CacophonyAPI) ReRegisterByAuthorized(newName, newGroup, newPassword, authToken string) error {
+	data := map[string]string{
+		"newName":         newName,
+		"newGroup":        newGroup,
+		"newPassword":     newPassword,
+		"authorizedToken": authToken,
+	}
+	jsonAll, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	log.Println("jsonAll", string(jsonAll))
+	url := joinURL(api.serverURL, apiBasePath, "devices/reregister-authorized")
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := handleHTTPResponse(resp); err != nil {
+		return err
+	}
+	var respData tokenResponse
+	d := json.NewDecoder(resp.Body)
+	if err := d.Decode(&respData); err != nil {
+		return fmt.Errorf("decode: %v", err)
+	}
+	api.device = &CacophonyDevice{
+		id:       respData.ID,
+		group:    newGroup,
+		name:     newName,
+		password: newPassword,
+	}
+	log.Println("respData.Token", respData.Token)
+	log.Println("respData.ID", respData.ID)
+
+	api.token = respData.Token
+	api.device.password = newPassword
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
+	if err != nil {
+		return err
+	}
+	conf.DeviceName = newName
+	conf.Group = newGroup
+	conf.ServerURL = api.serverURL
+	conf.DevicePassword = newPassword
+	conf.DeviceID = respData.ID
+	if err := conf.write(); err != nil {
+		return err
+	}
+	return updateHostnameFiles(api.getHostname())
+}
+
 // Reregister will register getting a new name and/or group
 func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error {
-
 	data := map[string]string{
 		"newName":     newName,
 		"newGroup":    newGroup,
@@ -655,4 +713,73 @@ func (api *CacophonyAPI) Heartbeat(nextHeartBeat time.Time) ([]byte, error) {
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
+}
+
+type Settings struct {
+	ReferenceImagePOV            string
+	ReferenceImagePOVFileSize    int
+	ReferenceImageInSitu         string
+	ReferenceImageInSituFileSize int
+	Warp                         Warp
+	MaskRegions                  []Region
+	RatThresh                    interface{}
+	Success                      bool
+	Messages                     []string
+}
+
+type Warp struct {
+	Dimensions  Dimensions
+	Origin      Point
+	TopLeft     Point
+	TopRight    Point
+	BottomLeft  Point
+	BottomRight Point
+}
+
+type Dimensions struct {
+	Width  int
+	Height int
+}
+
+type Point struct {
+	X int
+	Y int
+}
+
+type Region struct {
+	RegionData []Point `json:"regionData"`
+}
+
+func (api *CacophonyAPI) GetDeviceSettings() (*Settings, error) {
+	url := joinURL(api.serverURL, apiBasePath, "devices/"+strconv.Itoa(api.device.id)+"/settings")
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err := handleHTTPResponse(resp); err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings Settings
+	err = json.Unmarshal(body, &settings)
+	if err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
