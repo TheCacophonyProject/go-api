@@ -62,7 +62,6 @@ type CacophonyAPI struct {
 
 // joinURL creates an absolute url with supplied baseURL, and all paths
 func joinURL(baseURL string, paths ...string) string {
-
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return ""
@@ -79,6 +78,7 @@ func (api *CacophonyAPI) getAPIURL() string {
 func (api *CacophonyAPI) getAuthURL() string {
 	return joinURL(api.serverURL, authURL)
 }
+
 func (api *CacophonyAPI) getRegURL() string {
 	return joinURL(api.serverURL, apiBasePath, regURL)
 }
@@ -233,7 +233,6 @@ func (api *CacophonyAPI) authenticate() error {
 		data["groupname"] = api.device.group
 	}
 	payload, err := json.Marshal(data)
-
 	if err != nil {
 		return err
 	}
@@ -294,7 +293,7 @@ func shaHash(r io.Reader) (string, error) {
 func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (int, error) {
 	buf := new(bytes.Buffer)
 	w := multipart.NewWriter(buf)
-	//This will write to fileBytes as it reads r to get the sha hash
+	// This will write to fileBytes as it reads r to get the sha hash
 	var fileBytes bytes.Buffer
 	tee := io.TeeReader(r, &fileBytes)
 	hash, err := shaHash(tee)
@@ -311,7 +310,6 @@ func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (
 
 	// JSON encoded "data" parameter.
 	dataBuf, err := json.Marshal(data)
-
 	if err != nil {
 		return 0, err
 	}
@@ -519,7 +517,7 @@ func handleHTTPResponse(resp *http.Response) error {
 	return nil
 }
 
-//formatTimestamp to time.RFC3339Nano format
+// formatTimestamp to time.RFC3339Nano format
 func formatTimestamp(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
@@ -539,7 +537,7 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Authorization", api.token)
-	//client := new(http.Client)
+	// client := new(http.Client)
 
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
@@ -550,9 +548,64 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+// This allows the device to be registered even
+func (api *CacophonyAPI) ReRegisterByAuthorized(newName, newGroup, newPassword, authToken string) error {
+	data := map[string]string{
+		"newName":         newName,
+		"newGroup":        newGroup,
+		"newPassword":     newPassword,
+		"authorizedToken": authToken,
+	}
+	jsonAll, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	url := joinURL(api.serverURL, apiBasePath, "devices/reregister-authorized")
+	req, err := http.NewRequest("POST", url, bytes.NewReader(jsonAll))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if err := handleHTTPResponse(resp); err != nil {
+		return err
+	}
+	var respData tokenResponse
+	d := json.NewDecoder(resp.Body)
+	if err := d.Decode(&respData); err != nil {
+		return fmt.Errorf("decode: %v", err)
+	}
+	api.device = &CacophonyDevice{
+		id:       respData.ID,
+		group:    newGroup,
+		name:     newName,
+		password: newPassword,
+	}
+
+	api.token = respData.Token
+	api.device.password = newPassword
+	conf, err := NewConfig(goconfig.DefaultConfigDir)
+	if err != nil {
+		return err
+	}
+	conf.DeviceName = newName
+	conf.Group = newGroup
+	conf.ServerURL = api.serverURL
+	conf.DevicePassword = newPassword
+	conf.DeviceID = respData.ID
+	if err := conf.write(); err != nil {
+		return err
+	}
+	return updateHostnameFiles(api.getHostname())
+}
+
 // Reregister will register getting a new name and/or group
 func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error {
-
 	data := map[string]string{
 		"newName":     newName,
 		"newGroup":    newGroup,
@@ -655,4 +708,73 @@ func (api *CacophonyAPI) Heartbeat(nextHeartBeat time.Time) ([]byte, error) {
 	defer resp.Body.Close()
 
 	return ioutil.ReadAll(resp.Body)
+}
+
+type Settings struct {
+	ReferenceImagePOV            string
+	ReferenceImagePOVFileSize    int
+	ReferenceImageInSitu         string
+	ReferenceImageInSituFileSize int
+	Warp                         Warp
+	MaskRegions                  []Region
+	RatThresh                    interface{}
+	Success                      bool
+	Messages                     []string
+}
+
+type Warp struct {
+	Dimensions  Dimensions
+	Origin      Point
+	TopLeft     Point
+	TopRight    Point
+	BottomLeft  Point
+	BottomRight Point
+}
+
+type Dimensions struct {
+	Width  int
+	Height int
+}
+
+type Point struct {
+	X int
+	Y int
+}
+
+type Region struct {
+	RegionData []Point `json:"regionData"`
+}
+
+func (api *CacophonyAPI) GetDeviceSettings() (*Settings, error) {
+	url := joinURL(api.serverURL, apiBasePath, "devices/"+strconv.Itoa(api.device.id)+"/settings")
+	req, err := http.NewRequest("GET", url, nil)
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err := handleHTTPResponse(resp); err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var settings Settings
+	err = json.Unmarshal(body, &settings)
+	if err != nil {
+		return nil, err
+	}
+
+	return &settings, nil
 }
