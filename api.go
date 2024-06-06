@@ -710,6 +710,7 @@ func (api *CacophonyAPI) Heartbeat(nextHeartBeat time.Time) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
+// Ensure names match the API
 type Settings struct {
 	ReferenceImagePOV            string
 	ReferenceImagePOVFileSize    int
@@ -745,15 +746,14 @@ type Region struct {
 	RegionData []Point `json:"regionData"`
 }
 
-func (api *CacophonyAPI) GetDeviceSettings() (*Settings, error) {
+func (api *CacophonyAPI) GetDeviceSettings() (map[string]interface{}, error) {
 	url := joinURL(api.serverURL, apiBasePath, "devices/"+strconv.Itoa(api.device.id)+"/settings")
 	req, err := http.NewRequest("GET", url, nil)
-	req.Header.Set("Authorization", api.token)
-	req.Header.Set("Content-Type", "application/json")
-
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Authorization", api.token)
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
@@ -770,11 +770,63 @@ func (api *CacophonyAPI) GetDeviceSettings() (*Settings, error) {
 		return nil, err
 	}
 
-	var settings Settings
-	err = json.Unmarshal(body, &settings)
+	var response struct {
+		Settings map[string]interface{} `json:"settings"`
+		Success  bool                   `json:"success"`
+		Messages []string               `json:"messages"`
+	}
+	err = json.Unmarshal(body, &response)
 	if err != nil {
 		return nil, err
 	}
 
-	return &settings, nil
+	return response.Settings, nil
+}
+
+// UpdateDeviceSettings updates the device settings on the API and returns the updated settings
+func (api *CacophonyAPI) UpdateDeviceSettings(settings map[string]interface{}) (map[string]interface{}, error) {
+	if len(settings) == 0 {
+		fmt.Println("settings is empty")
+		return nil, nil
+	}
+	url := joinURL(api.serverURL, apiBasePath, "devices/"+strconv.Itoa(api.device.id)+"/settings")
+	payload, err := json.Marshal(map[string]interface{}{
+		"settings": settings,
+	})
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", api.token)
+
+	resp, err := api.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if err := handleHTTPResponse(resp); err != nil {
+		return nil, err
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var response struct {
+		Settings map[string]interface{} `json:"settings"`
+		Success  bool                   `json:"success"`
+		Messages []string               `json:"messages"`
+	}
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	return response.Settings, nil
 }
