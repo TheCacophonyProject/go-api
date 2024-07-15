@@ -173,12 +173,17 @@ func updateHostnameAndSaltGrains(device *CacophonyDevice) error {
 		return err
 	}
 
-	out, err := exec.Command("salt-call", "grains.setvals", string(grainsJSON)).CombinedOutput()
+	out, err := setSaltGrains(string(grainsJSON))
 	if err != nil {
 		log.Println(string(out))
 		return err
 	}
 	return nil
+}
+
+// setSaltGrains is a wrapper around the salt-call grains.setvals command. This is done for testing purposes
+var setSaltGrains = func(grains string) ([]byte, error) {
+	return exec.Command("salt-call", "grains.setvals", grains).CombinedOutput()
 }
 
 var Fs = afero.NewOsFs()

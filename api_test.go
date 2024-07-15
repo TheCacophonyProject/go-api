@@ -77,6 +77,10 @@ func TestMain(m *testing.M) {
 	Check README.md for more details.`, apiURL)
 		os.Exit(1)
 	}
+	// Mock the setSaltGrains function to do nothing
+	setSaltGrains = func(_ string) ([]byte, error) {
+		return nil, nil
+	}
 	os.Exit(m.Run())
 }
 
