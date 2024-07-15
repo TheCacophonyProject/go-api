@@ -16,7 +16,11 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
+	"os/exec"
+	"regexp"
 	"strings"
 
 	goconfig "github.com/TheCacophonyProject/go-config"
@@ -126,8 +130,15 @@ func (c *Config) validate() error {
 	return fmt.Errorf("error with config. %s", strings.Join(valsNotSet, ", "))
 }
 
-func updateHostnameFiles(hostname string) error {
-	if err := afero.WriteFile(Fs, hostnameFile, []byte(hostname), 0644); err != nil {
+func safeName(name string) string {
+	name = strings.ToLower(name)
+	reg := regexp.MustCompile("[^a-z0-9]+")
+	return reg.ReplaceAllString(name, "")
+}
+
+func updateHostnameAndSaltGrains(device *CacophonyDevice) error {
+	// Write the new hostname.
+	if err := afero.WriteFile(Fs, hostnameFile, []byte(device.hostname()), 0644); err != nil {
 		return err
 	}
 
@@ -141,11 +152,38 @@ func updateHostnameFiles(hostname string) error {
 	for i, line := range lines {
 		fields := strings.Fields(line)
 		if len(fields) >= 1 && fields[0] == "127.0.0.1" {
-			lines[i] = fmt.Sprintf(hostsFileFormat, hostname)
+			lines[i] = fmt.Sprintf(hostsFileFormat, device.hostname())
 		}
 	}
 	output := strings.Join(lines, "\n")
-	return afero.WriteFile(Fs, hostsFile, []byte(output), 0644)
+	err = afero.WriteFile(Fs, hostsFile, []byte(output), 0644)
+	if err != nil {
+		return err
+	}
+
+	// Write the new salt grains.
+	newGrains := map[string]string{
+		"device_name": device.name,
+		"group":       device.group,
+	}
+
+	// Convert the map to JSON
+	grainsJSON, err := json.Marshal(newGrains)
+	if err != nil {
+		return err
+	}
+
+	out, err := setSaltGrains(string(grainsJSON))
+	if err != nil {
+		log.Println(string(out))
+		return err
+	}
+	return nil
+}
+
+// setSaltGrains is a wrapper around the salt-call grains.setvals command. This is done for testing purposes
+var setSaltGrains = func(grains string) ([]byte, error) {
+	return exec.Command("salt-call", "grains.setvals", grains).CombinedOutput()
 }
 
 var Fs = afero.NewOsFs()
