@@ -134,7 +134,7 @@ func GetRegisterServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-//GetNewAuthenticateServer returns a test server that checks that posts contains
+// GetNewAuthenticateServer returns a test server that checks that posts contains
 // passowrd and devicename
 func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -152,7 +152,7 @@ func GetNewAuthenticateServer(t *testing.T) *httptest.Server {
 	return ts
 }
 
-//getMimeParts retrieves data and  file:file and Value:data from a multipart request
+// getMimeParts retrieves data and  file:file and Value:data from a multipart request
 func getMimeParts(r *http.Request) (map[string]interface{}, string) {
 	partReader, _ := r.MultipartReader()
 
@@ -182,8 +182,8 @@ func getMimeParts(r *http.Request) (map[string]interface{}, string) {
 	return data, fileData
 }
 
-//GetUploadVideoServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
-//and Authorization header
+// GetUploadVideoServer checks that the message is multipart and contains the required multipartmime file:file and Value:data
+// and Authorization header
 func GetUploadVideoServer(t *testing.T) *httptest.Server {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, http.MethodPost, r.Method)
@@ -288,7 +288,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api1.device.name, name, "name does not match what was registered with")
 	assert.Equal(t, api1.device.group, defaultGroup, "group does not match what was registered with")
 	assert.Equal(t, api1.Password(), password, "password does not match what was registered with")
-	assert.Equal(t, api1.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, api1.device.hostname(), getHostnameFromFile(t))
 	assert.Equal(t, 100, api1.device.saltId)
 	assert.NoError(t, checkHostsFile(api1))
 
@@ -315,7 +315,7 @@ func TestRegisterAndNew(t *testing.T) {
 }
 
 func TestIsNotRegisteredError(t *testing.T) {
-	assert.True(t, IsNotRegisteredError(notRegisteredError))
+	assert.True(t, IsNotRegisteredError(errNotRegistered))
 	assert.False(t, IsNotRegisteredError(errors.New("a error")))
 }
 
@@ -369,7 +369,7 @@ func TestDeviceReregister(t *testing.T) {
 	defer newFs(t, "")()
 	api, err := randomRegister()
 	require.NoError(t, err)
-	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, api.device.hostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 
 	originalName := api.device.name
@@ -394,7 +394,7 @@ func TestDeviceReregister(t *testing.T) {
 		"password shouldn't have changed if rename failed")
 	assert.Equal(t, api.serverURL, origionalServerURL,
 		"serverURL shouldn't have changed if rename failed")
-	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, api.device.hostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 
 	// reregister
@@ -409,7 +409,7 @@ func TestDeviceReregister(t *testing.T) {
 		"password should have changed to the new password")
 	assert.Equal(t, api.serverURL, origionalServerURL,
 		"serverURL shouldn't have changed if rename failed")
-	assert.Equal(t, api.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, api.device.hostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api))
 
 	// login again and check device and group name
@@ -419,7 +419,7 @@ func TestDeviceReregister(t *testing.T) {
 		"name should have changed to the new name")
 	assert.Equal(t, api2.device.group, defaultGroup2,
 		"group should have changed to the new group")
-	assert.Equal(t, api2.getHostname(), getHostnameFromFile(t))
+	assert.Equal(t, api2.device.hostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api2))
 
 	reader, err := os.Open(testCPTVFile)
@@ -527,7 +527,7 @@ func checkHostsFile(api *CacophonyAPI) error {
 		return err
 	}
 	hostsString := string(input)
-	substr := fmt.Sprintf(hostsFileFormat, api.getHostname()) + "\n"
+	substr := fmt.Sprintf(hostsFileFormat, api.device.hostname()) + "\n"
 	if strings.Contains(hostsString, substr) {
 		return nil
 	}

@@ -29,9 +29,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	goconfig "github.com/TheCacophonyProject/go-config"
@@ -51,6 +49,10 @@ type CacophonyDevice struct {
 	password string
 	id       int
 	saltId   int
+}
+
+func (d *CacophonyDevice) hostname() string {
+	return safeName(d.name) + "-" + safeName(d.group)
 }
 
 type CacophonyAPI struct {
@@ -211,7 +213,7 @@ func Register(devicename, password, group, apiURL string, saltId int) (*Cacophon
 	if err := conf.write(); err != nil {
 		return nil, err
 	}
-	if err := updateHostnameFiles(api.getHostname()); err != nil {
+	if err := updateHostnameAndSaltGrains(api.device); err != nil {
 		return nil, err
 	}
 	return api, nil
@@ -220,7 +222,7 @@ func Register(devicename, password, group, apiURL string, saltId int) (*Cacophon
 // authenticate a device with Cacophony API and retrieves the token
 func (api *CacophonyAPI) authenticate() error {
 	if api.device.password == "" {
-		return notRegisteredError
+		return errNotRegistered
 	}
 
 	data := map[string]interface{}{
@@ -601,7 +603,7 @@ func (api *CacophonyAPI) ReRegisterByAuthorized(newName, newGroup, newPassword, 
 	if err := conf.write(); err != nil {
 		return err
 	}
-	return updateHostnameFiles(api.getHostname())
+	return updateHostnameAndSaltGrains(api.device)
 }
 
 // Reregister will register getting a new name and/or group
@@ -664,23 +666,13 @@ func (api *CacophonyAPI) Reregister(newName, newGroup, newPassword string) error
 		return err
 	}
 
-	return updateHostnameFiles(api.getHostname())
+	return updateHostnameAndSaltGrains(api.device)
 }
 
-func (api *CacophonyAPI) getHostname() string {
-	return safeName(api.device.name) + "-" + safeName(api.device.group)
-}
-
-func safeName(name string) string {
-	name = strings.ToLower(name)
-	reg := regexp.MustCompile("[^a-z0-9]+")
-	return reg.ReplaceAllString(name, "")
-}
-
-var notRegisteredError = errors.New("device is not registered")
+var errNotRegistered = errors.New("device is not registered")
 
 func IsNotRegisteredError(err error) bool {
-	return err == notRegisteredError
+	return err == errNotRegistered
 }
 
 // Send heart beat from device with expected next heart beat time
