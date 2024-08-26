@@ -777,10 +777,6 @@ func (api *CacophonyAPI) GetDeviceSettings() (map[string]interface{}, error) {
 
 // UpdateDeviceSettings updates the device settings on the API and returns the updated settings
 func (api *CacophonyAPI) UpdateDeviceSettings(settings map[string]interface{}) (map[string]interface{}, error) {
-	if len(settings) == 0 {
-		fmt.Println("settings is empty")
-		return nil, nil
-	}
 	url := joinURL(api.serverURL, apiBasePath, "devices/"+strconv.Itoa(api.device.id)+"/settings")
 	payload, err := json.Marshal(map[string]interface{}{
 		"settings": settings,
