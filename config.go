@@ -16,16 +16,17 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
-	"log"
-	"os/exec"
 	"regexp"
 	"strings"
 
 	goconfig "github.com/TheCacophonyProject/go-config"
+	"github.com/TheCacophonyProject/go-utils/logging"
+	"github.com/TheCacophonyProject/go-utils/saltutil"
 	"github.com/spf13/afero"
 )
+
+var log = logging.NewLogger("info")
 
 const (
 	hostnameFile    = "/etc/hostname"
@@ -162,28 +163,26 @@ func updateHostnameAndSaltGrains(device *CacophonyDevice) error {
 	}
 
 	// Write the new salt grains.
-	newGrains := map[string]string{
-		"device_name": device.name,
-		"group":       device.group,
+	grains := saltutil.Grains{
+		DeviceName: device.name,
+		Group:      device.group,
 	}
 
-	// Convert the map to JSON
-	grainsJSON, err := json.Marshal(newGrains)
-	if err != nil {
-		return err
-	}
+	// Run the salt-call grains.setvals command in the
+	// background as it can take about 20 seconds to run.
+	go func() {
+		err := setSaltGrains(grains)
+		if err != nil {
+			log.Errorf("Failed to set grains: %v", err)
+		}
+	}()
 
-	out, err := setSaltGrains(string(grainsJSON))
-	if err != nil {
-		log.Println(string(out))
-		return err
-	}
 	return nil
 }
 
-// setSaltGrains is a wrapper around the salt-call grains.setvals command. This is done for testing purposes
-var setSaltGrains = func(grains string) ([]byte, error) {
-	return exec.Command("salt-call", "grains.setvals", grains).CombinedOutput()
+// setSaltGrains is a wrapper around the saltutil.SetGrains command. This is done for testing purposes.
+var setSaltGrains = func(grains saltutil.Grains) error {
+	return saltutil.SetGrains(grains, log)
 }
 
 var Fs = afero.NewOsFs()
