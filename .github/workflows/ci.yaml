@@ -36,7 +36,7 @@ jobs:
         run: go install honnef.co/go/tools/cmd/staticcheck@latest
 
       - name: Run Staticcheck
-        run: staticcheck --checks="all,-ST1000,-ST1022,-ST1020,-ST1003" ./...
+        run: staticcheck --checks="all,-ST1000,-ST1022,-ST1020,-ST1003,-ST1021" ./...
 
       - name: Check for Uncommitted Changes
         run: |

@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -364,7 +363,7 @@ func TestFileDownload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fileResponse.FileSize, rawFileSize)
 
-	fileData, err := ioutil.ReadFile(filePath)
+	fileData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, rawFileData, string(fileData))
 }
