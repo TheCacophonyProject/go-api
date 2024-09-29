@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net"
 	"net/http"
@@ -71,10 +70,6 @@ func joinURL(baseURL string, paths ...string) string {
 	url := path.Join(paths...)
 	u.Path = path.Join(u.Path, url)
 	return u.String()
-}
-
-func (api *CacophonyAPI) getAPIURL() string {
-	return joinURL(api.serverURL, apiBasePath)
 }
 
 func (api *CacophonyAPI) getAuthURL() string {
@@ -363,15 +358,6 @@ type fileUploadResponse struct {
 	Messages    []string
 }
 
-// message gets the first message of the supplised tokenResponse if present
-// otherwise default of "unknown"
-func (r *tokenResponse) message() string {
-	if len(r.Messages) > 0 {
-		return r.Messages[0]
-	}
-	return "unknown"
-}
-
 // getFileFromJWT downloads a file from the Cacophony API using supplied JWT
 // and saves it to the supplied path
 func (api *CacophonyAPI) getFileFromJWT(jwt, filePath string) error {
@@ -507,7 +493,7 @@ func (api *CacophonyAPI) ReportEvent(jsonDetails []byte, times []time.Time) erro
 // described in error.go
 func handleHTTPResponse(resp *http.Response) error {
 	if !(isHTTPSuccess(resp.StatusCode)) {
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return temporaryError(fmt.Errorf("request failed (%d) and body read failed: %v", resp.StatusCode, err))
 		}
@@ -547,7 +533,7 @@ func (api *CacophonyAPI) GetSchedule() ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // This allows the device to be registered even
@@ -699,7 +685,7 @@ func (api *CacophonyAPI) Heartbeat(nextHeartBeat time.Time) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // Ensure names match the API

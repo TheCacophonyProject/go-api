@@ -21,8 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"math/rand"
 	"mime/multipart"
 	"net/http"
@@ -35,6 +33,7 @@ import (
 
 	goconfig "github.com/TheCacophonyProject/go-config"
 	"github.com/TheCacophonyProject/go-config/configtest"
+	"github.com/TheCacophonyProject/go-utils/saltutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -78,8 +77,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	// Mock the setSaltGrains function to do nothing
-	setSaltGrains = func(_ string) ([]byte, error) {
-		return nil, nil
+	setSaltGrains = func(_ saltutil.Grains) error {
+		return nil
 	}
 	os.Exit(m.Run())
 }
@@ -364,7 +363,7 @@ func TestFileDownload(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, fileResponse.FileSize, rawFileSize)
 
-	fileData, err := ioutil.ReadFile(filePath)
+	fileData, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, rawFileData, string(fileData))
 }

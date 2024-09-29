@@ -1,0 +1,77 @@
+name: Go CI & Release
+
+on:
+  push:
+    branches: 
+      - '**'
+    tags:
+      - '*'
+  pull_request:
+    branches: 
+      - '**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Git Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Go version from go.mod
+        id: go-version
+        run: echo "GO_VERSION=$(grep '^go ' go.mod | awk '{print $2}')" >> $GITHUB_ENV
+
+      - name: Setting up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Go Mod Tidy
+        run: go mod tidy
+
+      - name: Install Staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run Staticcheck
+        run: staticcheck --checks="all,-ST1000,-ST1022,-ST1020,-ST1003,-ST1021" ./...
+
+      - name: Check for Uncommitted Changes
+        run: |
+          git diff --exit-code || (
+            echo "::error::Uncommitted changes found! Please run 'go mod tidy' to clean up 'go.mod' and 'go.sum'." 
+            exit 1
+          )
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version  # Verify installation
+
+      - name: Clone cacophony-api repository
+        run: git clone "https://github.com/TheCacophonyProject/cacophony-api"
+
+      - name: Start the cacophony-api docker server
+        run: |
+          cd cacophony-api
+          docker-compose build
+          docker-compose up --force-recreate -d
+          cd ..
+
+      - name: Copy the seed SQL file
+        run: docker cp db-test-seed.sql cacophony-api:/db-seed.sql
+
+      - name: Wait for API to be ready
+        run: ./cacophony-api/wait-for-api || { docker ps; docker logs cacophony-api; exit 1; }
+
+      - name: Seed the database
+        run: sudo docker exec cacophony-api sh -c "sudo -i -u postgres psql cacophonytest -f/db-seed.sql"
+
+      - name: Run Go Vet
+        run: go vet ./...
+
+      - name: Run Go Tests
+        run: go test ./...
