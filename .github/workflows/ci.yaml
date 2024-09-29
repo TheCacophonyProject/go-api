@@ -45,6 +45,31 @@ jobs:
             exit 1
           )
 
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.21.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version  # Verify installation
+
+      - name: Clone cacophony-api repository
+        run: git clone "https://github.com/TheCacophonyProject/cacophony-api"
+
+      - name: Start the cacophony-api docker server
+        run: |
+          cd cacophony-api
+          docker-compose build
+          docker-compose up --force-recreate -d
+          cd ..
+
+      - name: Copy the seed SQL file
+        run: docker cp db-test-seed.sql cacophony-api:/db-seed.sql
+
+      - name: Wait for API to be ready
+        run: ./cacophony-api/wait-for-api || { docker ps; docker logs cacophony-api; exit 1; }
+
+      - name: Seed the database
+        run: sudo docker exec cacophony-api sh -c "sudo -i -u postgres psql cacophonytest -f/db-seed.sql"
+
       - name: Run Go Vet
         run: go vet ./...
 
