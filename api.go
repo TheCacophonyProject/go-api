@@ -303,7 +303,16 @@ func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (
 	if _, ok := data["type"]; !ok {
 		data["type"] = "thermalRaw"
 	}
+
 	data["fileHash"] = hash
+
+	filename := "file"
+	value, exists := data["filename"]
+	if exists {
+		if value, ok := value.(string); ok {
+			filename = value
+		}
+	}
 
 	// JSON encoded "data" parameter.
 	dataBuf, err := json.Marshal(data)
@@ -315,7 +324,7 @@ func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (
 	}
 
 	// Add the file as a new MIME part.
-	fw, err := w.CreateFormFile("file", "file")
+	fw, err := w.CreateFormFile("file", filename)
 	if err != nil {
 		return 0, err
 	}
