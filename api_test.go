@@ -97,8 +97,17 @@ func TestUploadVideoHttpRequest(t *testing.T) {
 	defer ts.Close()
 
 	api := getAPI(ts.URL, "", true)
-	reader := strings.NewReader(rawThermalData)
-	id, err := api.UploadVideo(reader, nil)
+
+	// Create a temp file with the test content.
+	tmp, err := os.CreateTemp("", "upload-video-*.raw")
+	require.NoError(t, err)
+	defer os.Remove(tmp.Name())
+	_, err = tmp.WriteString(rawThermalData)
+	require.NoError(t, err)
+	require.NoError(t, tmp.Close())
+
+	// Now call the new API with the file path.
+	id, err := api.UploadVideo(tmp.Name(), nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -226,11 +235,7 @@ func TestAPIUploadVideo(t *testing.T) {
 	api, err := randomRegister()
 	require.NoError(t, err)
 
-	reader, err := os.Open(testCPTVFile)
-	assert.NoError(t, err)
-	defer reader.Close()
-
-	id, err := api.UploadVideo(reader, nil)
+	id, err := api.UploadVideo(testCPTVFile, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }
@@ -303,11 +308,7 @@ func TestRegisterAndNew(t *testing.T) {
 	assert.Equal(t, api2.Password(), password, "password does not match what was registered with")
 	assert.NoError(t, checkHostsFile(api2))
 
-	reader, err := os.Open(testCPTVFile)
-	assert.NoError(t, err)
-	defer reader.Close()
-
-	id, err := api2.UploadVideo(reader, nil)
+	id, err := api2.UploadVideo(testCPTVFile, nil)
 	assert.NoError(t, err, "check that api can upload recordings")
 	assert.NotEmpty(t, id, "check that recording id is not 0")
 
@@ -425,11 +426,7 @@ func TestDeviceReregister(t *testing.T) {
 	assert.Equal(t, api2.device.hostname(), getHostnameFromFile(t))
 	assert.NoError(t, checkHostsFile(api2))
 
-	reader, err := os.Open(testCPTVFile)
-	assert.NoError(t, err)
-	defer reader.Close()
-
-	id, err := api2.UploadVideo(reader, nil)
+	id, err := api2.UploadVideo(testCPTVFile, nil)
 	assert.NoError(t, err)
 	assert.NotEmpty(t, id)
 }

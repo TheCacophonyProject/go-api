@@ -28,6 +28,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -277,72 +278,113 @@ func newHTTPClient() *http.Client {
 	}
 }
 
-func shaHash(r io.Reader) (string, error) {
+func shaHashFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
 	h := sha1.New()
-	if _, err := io.Copy(h, r); err != nil {
+	if _, err := io.Copy(h, f); err != nil {
 		return "", err
 	}
 	hashString := fmt.Sprintf("%x", h.Sum(nil))
 	return hashString, nil
 }
 
-// UploadVideo uploads the file to Cacophony API as a multipartmessage
-func (api *CacophonyAPI) UploadVideo(r io.Reader, data map[string]interface{}) (int, error) {
-	buf := new(bytes.Buffer)
-	w := multipart.NewWriter(buf)
-	// This will write to fileBytes as it reads r to get the sha hash
-	var fileBytes bytes.Buffer
-	tee := io.TeeReader(r, &fileBytes)
-	hash, err := shaHash(tee)
+func (api *CacophonyAPI) UploadVideo(filePath string, data map[string]any) (int, error) {
+	// Calculate the hash
+	hash, err := shaHashFile(filePath)
 	if err != nil {
 		return 0, err
 	}
+
+	// Build the metadata map.
 	if data == nil {
-		data = make(map[string]interface{})
+		data = make(map[string]any)
 	}
 	if _, ok := data["type"]; !ok {
 		data["type"] = "thermalRaw"
 	}
 	data["fileHash"] = hash
 
-	// JSON encoded "data" parameter.
-	dataBuf, err := json.Marshal(data)
+	dataMarshaled, err := json.Marshal(data)
 	if err != nil {
-		return 0, err
-	}
-	if err := w.WriteField("data", string(dataBuf)); err != nil {
 		return 0, err
 	}
 
-	// Add the file as a new MIME part.
-	fw, err := w.CreateFormFile("file", "file")
+	// Create a pipe: the multipart writer writes into pipeWriter,
+	// and the HTTP client reads from pipeReader. This lets us stream
+	// the file without buffering the entire request body in memory.
+	pipeReader, pipeWriter := io.Pipe()
+	w := multipart.NewWriter(pipeWriter)
+
+	// All writes to pipeWriter (and thus to the multipart body) must happen
+	// in a separate goroutine, because writes will block until the HTTP
+	// client reads from pipeReader.
+	go func() {
+		defer func() {
+			_ = w.Close()
+			_ = pipeWriter.Close()
+		}()
+
+		// Write the JSON field.
+		if err := w.WriteField("data", string(dataMarshaled)); err != nil {
+			_ = pipeWriter.CloseWithError(err)
+			return
+		}
+
+		// Open and stream the file.
+		f, err := os.Open(filePath)
+		if err != nil {
+			_ = pipeWriter.CloseWithError(err)
+			return
+		}
+		defer f.Close()
+
+		fileWriter, err := w.CreateFormFile("file", filepath.Base(filePath))
+		if err != nil {
+			_ = pipeWriter.CloseWithError(err)
+			return
+		}
+
+		if _, err := io.Copy(fileWriter, f); err != nil {
+			_ = pipeWriter.CloseWithError(err)
+			return
+		}
+	}()
+
+	// Create the request with the pipeReader as the body.
+	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), pipeReader)
 	if err != nil {
 		return 0, err
 	}
-	io.Copy(fw, &fileBytes)
-	w.Close()
-	req, err := http.NewRequest("POST", joinURL(api.serverURL, apiBasePath, "/recordings"), buf)
-	if err != nil {
-		return 0, err
-	}
+
+	// Set headers.
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Authorization", api.token)
 
+	// Sending the request will read from pipeReader, which in turn unblocks
+	// the goroutine writing multipart data into pipeWriter. This streams the
+	// request body instead of holding it all in RAM.
 	resp, err := api.httpClient.Do(req)
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
 
+	// Error if the response is non 2xx
 	if err := handleHTTPResponse(resp); err != nil {
 		return 0, err
 	}
-	var fr fileUploadResponse
-	d := json.NewDecoder(resp.Body)
-	if err := d.Decode(&fr); err != nil {
+
+	// Decode the JSON response.
+	var fileResponse fileUploadResponse
+	if err := json.NewDecoder(resp.Body).Decode(&fileResponse); err != nil {
 		return 0, err
 	}
-	return fr.RecordingID, nil
+
+	return fileResponse.RecordingID, nil
 }
 
 type tokenResponse struct {
